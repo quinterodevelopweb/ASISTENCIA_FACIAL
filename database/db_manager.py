@@ -23,10 +23,14 @@ class DBManager:
         return conn
 
     def init_db(self) -> None:
-        """Crea las tablas definidas en schema.sql si no existen."""
+        """Crea las tablas definidas en schema.sql si la base de datos aún no existe."""
         with self.get_connection() as conn:
-            with open(self.schema_path, "r", encoding="utf-8") as f:
-                conn.executescript(f.read())
+            existe = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='tipo_usuario'"
+            ).fetchone()
+            if existe is None:
+                with open(self.schema_path, "r", encoding="utf-8") as f:
+                    conn.executescript(f.read())
 
     @staticmethod
     def encoding_to_blob(encoding: np.ndarray) -> bytes:
