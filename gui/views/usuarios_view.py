@@ -2,10 +2,11 @@
 
 import sqlite3
 
+import cv2
 import customtkinter as ctk
 from PIL import Image
 
-from config.settings import CAMERA_HEIGHT, CAMERA_WIDTH, SCAN_INTERVAL_MS
+from config.settings import CAMERA_HEIGHT, CAMERA_WIDTH, RECOGNITION_WIDTH, SCAN_INTERVAL_MS
 from core.camera import Camera
 from gui.views.base_view import BaseView
 from gui.widgets.face_enrollment_widget import FaceEnrollmentWidget
@@ -131,7 +132,10 @@ class UsuariosView(BaseView):
             else:
                 self._ctk_image.configure(light_image=imagen_pil)
 
-            self.face_widget.procesar_frame(frame)
+            height, width = frame.shape[:2]
+            scale = RECOGNITION_WIDTH / width
+            frame_pequeno = cv2.resize(frame, (RECOGNITION_WIDTH, int(height * scale)), interpolation=cv2.INTER_AREA)
+            self.face_widget.procesar_frame(frame_pequeno)
 
         self._after_id = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
 

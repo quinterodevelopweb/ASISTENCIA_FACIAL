@@ -62,6 +62,15 @@ class UsuarioService:
     def desactivar_usuario(self, idUsuario: int) -> None:
         self.actualizar_usuario(idUsuario, estado=0)
 
+    def activar_usuario(self, idUsuario: int) -> None:
+        self.actualizar_usuario(idUsuario, estado=1)
+
+    def eliminar_usuario(self, idUsuario: int) -> None:
+        """Elimina al usuario de forma permanente junto con sus encodings,
+        inscripciones y registros de asistencia (ON DELETE CASCADE)."""
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM usuarios WHERE idUsuario = ?", (idUsuario,))
+
     def obtener_usuario(self, idUsuario: int) -> dict | None:
         with self.db.get_connection() as conn:
             row = conn.execute("SELECT * FROM usuarios WHERE idUsuario = ?", (idUsuario,)).fetchone()

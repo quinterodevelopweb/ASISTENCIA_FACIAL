@@ -2,11 +2,13 @@
 re-captura de rostro."""
 
 import sqlite3
+import tkinter.messagebox as messagebox
 
+import cv2
 import customtkinter as ctk
 from PIL import Image
 
-from config.settings import CAMERA_HEIGHT, CAMERA_WIDTH, SCAN_INTERVAL_MS
+from config.settings import CAMERA_HEIGHT, CAMERA_WIDTH, RECOGNITION_WIDTH, SCAN_INTERVAL_MS
 from core.camera import Camera
 from gui.views.base_view import BaseView
 from gui.widgets.face_enrollment_widget import FaceEnrollmentWidget
@@ -31,6 +33,7 @@ class CatalogoUsuariosView(BaseView):
         self._nombres_por_tipo: dict[int, str] = {}
         self._checks_clases: dict[int, ctk.BooleanVar] = {}
         self._idUsuario_actual: int | None = None
+        self._estado_actual: int = 1
 
         self.grid_columnconfigure(0, weight=0)
         self.grid_columnconfigure(1, weight=1)
@@ -69,6 +72,15 @@ class CatalogoUsuariosView(BaseView):
         self.label_mensaje = ctk.CTkLabel(self.frame_edicion, text="")
         self.btn_guardar = ctk.CTkButton(self.frame_edicion, text="Guardar cambios", command=self._guardar_cambios)
 
+        self.frame_acciones = ctk.CTkFrame(self.frame_edicion, fg_color="transparent")
+        self.btn_estado = ctk.CTkButton(self.frame_acciones, text="Desactivar usuario", command=self._toggle_estado)
+        self.btn_estado.pack(side="left", expand=True, fill="x", padx=(0, 5))
+        self.btn_eliminar = ctk.CTkButton(
+            self.frame_acciones, text="Eliminar usuario", fg_color="#b3261e", hover_color="#8c1d17",
+            command=self._eliminar_usuario,
+        )
+        self.btn_eliminar.pack(side="left", expand=True, fill="x", padx=(5, 0))
+
         # Orden en el que se muestran al seleccionar un usuario
         self._widgets_formulario = [
             self.combo_tipo,
@@ -86,6 +98,7 @@ class CatalogoUsuariosView(BaseView):
             self.btn_recapturar,
             self.label_mensaje,
             self.btn_guardar,
+            self.frame_acciones,
         ]
 
     # --- Ciclo de vida -----------------------------------------------------
@@ -114,7 +127,7 @@ class CatalogoUsuariosView(BaseView):
         for widget in self.frame_lista.winfo_children():
             widget.destroy()
 
-        usuarios = self.usuario_service.listar_usuarios()
+        usuarios = self.usuario_service.listar_usuarios(solo_activos=False)
         if not usuarios:
             ctk.CTkLabel(self.frame_lista, text="No hay usuarios registrados").pack(anchor="w", padx=10, pady=5)
             return
@@ -122,11 +135,14 @@ class CatalogoUsuariosView(BaseView):
         for usuario in usuarios:
             apellidos = " ".join(filter(None, [usuario["apPaterno"], usuario["apMaterno"]]))
             texto = f"{usuario['nombre']} {apellidos}"
+            if not usuario["estado"]:
+                texto += " (inactivo)"
             ctk.CTkButton(
                 self.frame_lista,
                 text=texto,
                 anchor="w",
                 fg_color="transparent",
+                text_color="gray60" if not usuario["estado"] else None,
                 command=lambda idUsuario=usuario["idUsuario"]: self._seleccionar_usuario(idUsuario),
             ).pack(fill="x", padx=5, pady=2)
 
@@ -138,6 +154,8 @@ class CatalogoUsuariosView(BaseView):
             return
 
         self._idUsuario_actual = idUsuario
+        self._estado_actual = usuario["estado"]
+        self._actualizar_boton_estado()
 
         self.combo_tipo.set(self._nombres_por_tipo.get(usuario["tipoUsuario"], ""))
         self._set_entry(self.entry_no_cuenta, usuario["noCuenta"])
@@ -194,7 +212,10 @@ class CatalogoUsuariosView(BaseView):
             else:
                 self._ctk_image.configure(light_image=imagen_pil)
 
-            self.face_widget.procesar_frame(frame)
+            height, width = frame.shape[:2]
+            scale = RECOGNITION_WIDTH / width
+            frame_pequeno = cv2.resize(frame, (RECOGNITION_WIDTH, int(height * scale)), interpolation=cv2.INTER_AREA)
+            self.face_widget.procesar_frame(frame_pequeno)
 
         self._after_id = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
 
@@ -247,3 +268,51 @@ class CatalogoUsuariosView(BaseView):
 
         self.label_mensaje.configure(text="Usuario actualizado correctamente", text_color="green")
         self._cargar_lista_usuarios()
+
+    # --- Estado y eliminación ---------------------------------------------------
+
+    def _actualizar_boton_estado(self) -> None:
+        if self._estado_actual:
+            self.btn_estado.configure(text="Desactivar usuario", fg_color=["#3a7ebf", "#1f538d"], hover_color=["#325882", "#14375e"])
+        else:
+            self.btn_estado.configure(text="Activar usuario", fg_color="#2fa572", hover_color="#218358")
+
+    def _toggle_estado(self) -> None:
+        if self._idUsuario_actual is None:
+            return
+
+        if self._estado_actual:
+            self.usuario_service.desactivar_usuario(self._idUsuario_actual)
+            self._estado_actual = 0
+            self.label_mensaje.configure(text="Usuario desactivado", text_color="green")
+        else:
+            self.usuario_service.activar_usuario(self._idUsuario_actual)
+            self._estado_actual = 1
+            self.label_mensaje.configure(text="Usuario activado", text_color="green")
+
+        self._actualizar_boton_estado()
+        self._cargar_lista_usuarios()
+
+    def _eliminar_usuario(self) -> None:
+        if self._idUsuario_actual is None:
+            return
+
+        nombre = f"{self.entry_nombre.get().strip()} {self.entry_ap_paterno.get().strip()}"
+        if not messagebox.askyesno(
+            "Eliminar usuario",
+            f"¿Eliminar permanentemente a {nombre}?\n"
+            "Se borrarán también su rostro registrado, sus inscripciones y su historial de asistencia.\n"
+            "Esta acción no se puede deshacer.",
+        ):
+            return
+
+        self.usuario_service.eliminar_usuario(self._idUsuario_actual)
+        self._idUsuario_actual = None
+        self.face_widget.reset()
+        self._ocultar_formulario()
+        self._cargar_lista_usuarios()
+
+    def _ocultar_formulario(self) -> None:
+        for widget in self._widgets_formulario:
+            widget.pack_forget()
+        self.label_sin_seleccion.pack(pady=20)

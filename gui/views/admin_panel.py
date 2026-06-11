@@ -38,7 +38,7 @@ class AdminPanel(BaseView):
         ctk.CTkButton(sidebar, text="Usuarios", command=lambda: self._mostrar_vista("usuarios")).pack(
             pady=5, padx=10, fill="x"
         )
-        ctk.CTkButton(sidebar, text="Catálogo", command=lambda: self._mostrar_vista("catalogo")).pack(
+        ctk.CTkButton(sidebar, text="Registrar usuario", command=lambda: self._mostrar_vista("registro")).pack(
             pady=5, padx=10, fill="x"
         )
         ctk.CTkButton(sidebar, text="Clases", command=lambda: self._mostrar_vista("clases")).pack(
@@ -54,8 +54,8 @@ class AdminPanel(BaseView):
 
     def _crear_vistas(self) -> None:
         self.vistas: dict[str, BaseView] = {
-            "usuarios": UsuariosView(self),
-            "catalogo": CatalogoUsuariosView(self),
+            "usuarios": CatalogoUsuariosView(self),
+            "registro": UsuariosView(self),
             "clases": ClasesView(self),
             "reportes": ReportesView(self),
         }

@@ -37,24 +37,24 @@ ENROLLMENT_YAW_GIRO = 0.35
 ENCODING_MODEL_NAME = "face_recognition_resnet_v1"
 ENCODING_DIMENSION = 128
 
-# Detección de movimiento (vista de Asistencia)
-MOTION_THRESHOLD = 25
-MOTION_MIN_AREA_RATIO = 0.02
-# Ancho (px) al que se reduce el frame solo para calcular el movimiento (más rápido)
-MOTION_DETECTION_WIDTH = 160
-
 # Ancho (px) al que se reduce el frame solo para el reconocimiento facial (más rápido)
 RECOGNITION_WIDTH = 320
 
-# Frecuencia de captura de frames (ms) y tiempo que se muestra un resultado
-# antes de reanudar el escaneo
-SCAN_INTERVAL_MS = 40
+# Cada cuánto tiempo (segundos) se intenta reconocer un rostro mientras se
+# escanea (vista de Asistencia)
+RECOGNITION_INTERVAL_S = 0.4
+
+# Frecuencia con la que la interfaz refresca el video (ms) y tiempo que se
+# muestra un resultado antes de reanudar el escaneo. La captura real ocurre en
+# un hilo aparte (ver core/camera.py), así que este intervalo solo controla el
+# refresco de pantalla.
+SCAN_INTERVAL_MS = 30
 RESULT_DISPLAY_MS = 3000
 
 # Cámara
 CAMERA_INDEX = 0
-CAMERA_WIDTH = 640
-CAMERA_HEIGHT = 480
+CAMERA_WIDTH = 800
+CAMERA_HEIGHT = 600
 CAMERA_FPS = 30
 
 # Interfaz
