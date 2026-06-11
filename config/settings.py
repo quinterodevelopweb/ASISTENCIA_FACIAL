@@ -44,3 +44,7 @@ CAMERA_HEIGHT = 240
 APP_TITLE = "Sistema de Asistencia Facial"
 APP_THEME = "dark"  # "dark" | "light" | "system"
 APP_COLOR_THEME = "blue"
+
+# Contraseña para entrar al panel de administrador desde la pantalla de escaneo.
+# IMPORTANTE: cambiar este valor antes de usar el sistema en producción.
+ADMIN_PASSWORD = "admin123"

@@ -1,12 +1,12 @@
-"""Ventana principal de la aplicación: navegación entre vistas."""
+"""Ventana principal de la aplicación: pantalla de Usuario (escaneo) y panel
+de Administrador, protegido por contraseña."""
 
 import customtkinter as ctk
 
-from config.settings import APP_COLOR_THEME, APP_THEME, APP_TITLE
+from config.settings import ADMIN_PASSWORD, APP_COLOR_THEME, APP_THEME, APP_TITLE
+from gui.views.admin_panel import AdminPanel
 from gui.views.asistencia_view import AsistenciaView
-from gui.views.clases_view import ClasesView
-from gui.views.reportes_view import ReportesView
-from gui.views.usuarios_view import UsuariosView
+from gui.widgets.password_dialog import PasswordDialog
 
 
 class App(ctk.CTk):
@@ -19,58 +19,43 @@ class App(ctk.CTk):
         self.title(APP_TITLE)
         self.geometry("800x480")
 
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        self._vista_activa: str | None = None
+        self._pantalla_activa: str | None = None
 
-        self._crear_sidebar()
-        self._crear_vistas()
-        self.mostrar_vista("asistencia")
+        self._crear_pantallas()
+        self.mostrar_pantalla("usuario")
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
-    def _crear_sidebar(self) -> None:
-        self.sidebar = ctk.CTkFrame(self, width=160, corner_radius=0)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-
-        ctk.CTkLabel(self.sidebar, text=APP_TITLE, font=ctk.CTkFont(size=14, weight="bold"), wraplength=140).pack(
-            pady=20, padx=10
-        )
-
-        ctk.CTkButton(self.sidebar, text="Asistencia", command=lambda: self.mostrar_vista("asistencia")).pack(
-            pady=5, padx=10, fill="x"
-        )
-        ctk.CTkButton(self.sidebar, text="Usuarios", command=lambda: self.mostrar_vista("usuarios")).pack(
-            pady=5, padx=10, fill="x"
-        )
-        ctk.CTkButton(self.sidebar, text="Clases", command=lambda: self.mostrar_vista("clases")).pack(
-            pady=5, padx=10, fill="x"
-        )
-        ctk.CTkButton(self.sidebar, text="Reportes", command=lambda: self.mostrar_vista("reportes")).pack(
-            pady=5, padx=10, fill="x"
-        )
-
-    def _crear_vistas(self) -> None:
-        self.vistas = {
-            "asistencia": AsistenciaView(self),
-            "usuarios": UsuariosView(self),
-            "clases": ClasesView(self),
-            "reportes": ReportesView(self),
+    def _crear_pantallas(self) -> None:
+        self.pantallas = {
+            "usuario": AsistenciaView(self, on_admin_click=self._solicitar_acceso_admin),
+            "admin": AdminPanel(self, on_salir=lambda: self.mostrar_pantalla("usuario")),
         }
-        for vista in self.vistas.values():
-            vista.grid(row=0, column=1, sticky="nsew")
+        for pantalla in self.pantallas.values():
+            pantalla.grid(row=0, column=0, sticky="nsew")
 
-    def mostrar_vista(self, nombre: str) -> None:
-        if self._vista_activa is not None:
-            self.vistas[self._vista_activa].on_hide()
+    def mostrar_pantalla(self, nombre: str) -> None:
+        if self._pantalla_activa is not None:
+            self.pantallas[self._pantalla_activa].on_hide()
 
-        self._vista_activa = nombre
-        vista = self.vistas[nombre]
-        vista.tkraise()
-        vista.on_show()
+        self._pantalla_activa = nombre
+        pantalla = self.pantallas[nombre]
+        pantalla.tkraise()
+        pantalla.on_show()
+
+    def _solicitar_acceso_admin(self) -> None:
+        password = PasswordDialog(self).pedir_password()
+        if password is None:
+            return
+        if password == ADMIN_PASSWORD:
+            self.mostrar_pantalla("admin")
+        else:
+            self.pantallas["usuario"].mostrar_mensaje_auth("Contraseña incorrecta")
 
     def _on_close(self) -> None:
-        if self._vista_activa is not None:
-            self.vistas[self._vista_activa].on_hide()
+        if self._pantalla_activa is not None:
+            self.pantallas[self._pantalla_activa].on_hide()
         self.destroy()

@@ -14,7 +14,8 @@ from services.usuario_service import UsuarioService
 class ResultadoAsistencia:
     SIN_ROSTRO = "SIN_ROSTRO"  # no se detectó ningún rostro en el frame, seguir escaneando
     NO_IDENTIFICADO = "NO_IDENTIFICADO"  # rostro detectado pero no coincide con ningún usuario
-    NO_INSCRITO = "NO_INSCRITO"  # usuario reconocido pero no pertenece a esta clase
+    SIN_CLASES = "SIN_CLASES"  # usuario reconocido pero no inscrito en ninguna clase
+    IDENTIFICADO = "IDENTIFICADO"  # usuario reconocido, debe elegir su clase
     YA_REGISTRADO = "YA_REGISTRADO"  # ya existe un registro de hoy para usuario+clase
     REGISTRADO = "REGISTRADO"  # asistencia registrada con éxito
 
@@ -30,17 +31,15 @@ class AsistenciaService:
         self.usuarios = usuario_service or UsuarioService(self.db)
         self.inscripciones = inscripcion_service or InscripcionService(self.db)
 
-    def procesar_frame(self, frame_rgb: np.ndarray, idClase: int) -> tuple[str, dict | None]:
-        """Procesa un frame de cámara: busca un rostro, lo identifica contra los
-        encodings registrados y, si pertenece a la clase indicada, registra su
-        asistencia.
+    def identificar(self, frame_rgb: np.ndarray) -> tuple[str, dict | None]:
+        """Busca un rostro en el frame y lo identifica contra los encodings registrados.
 
         Devuelve (resultado, datos):
           - SIN_ROSTRO: no hay rostro en el frame -> seguir escaneando, sin error.
           - NO_IDENTIFICADO: hay un rostro pero no coincide con ningún usuario.
-          - NO_INSCRITO: el usuario reconocido no está dado de alta en esta clase.
-          - YA_REGISTRADO: el usuario ya tiene asistencia registrada hoy en esta clase.
-          - REGISTRADO: asistencia registrada correctamente.
+          - SIN_CLASES: el usuario fue reconocido pero no está inscrito en ninguna clase.
+          - IDENTIFICADO: usuario reconocido; datos incluye "usuario", "confianza" y "clases"
+            (las clases en las que está inscrito, para que elija una).
         """
         encoding = get_single_face_encoding(frame_rgb)
         if encoding is None:
@@ -54,25 +53,28 @@ class AsistenciaService:
             return ResultadoAsistencia.NO_IDENTIFICADO, {"confianza": confianza}
 
         usuario = self.usuarios.obtener_usuario(idUsuario)
+        clases = self.inscripciones.listar_clases_de_usuario(idUsuario)
 
-        if not self.inscripciones.esta_inscrito(idUsuario, idClase):
-            return ResultadoAsistencia.NO_INSCRITO, {"usuario": usuario, "confianza": confianza}
+        if not clases:
+            return ResultadoAsistencia.SIN_CLASES, {"usuario": usuario, "confianza": confianza}
 
-        if self._registrar_asistencia(idUsuario, idClase, confianza):
-            return ResultadoAsistencia.REGISTRADO, {"usuario": usuario, "confianza": confianza}
+        return ResultadoAsistencia.IDENTIFICADO, {"usuario": usuario, "confianza": confianza, "clases": clases}
 
-        return ResultadoAsistencia.YA_REGISTRADO, {"usuario": usuario, "confianza": confianza}
+    def registrar_asistencia(self, idUsuario: int, idClase: int, confianza: float, estado: str = "PRESENTE") -> str:
+        """Registra la asistencia de un usuario ya identificado en la clase elegida.
 
-    def _registrar_asistencia(self, idUsuario: int, idClase: int, confianza: float, estado: str = "PRESENTE") -> bool:
+        Devuelve REGISTRADO o YA_REGISTRADO (si ya existía un registro de hoy para
+        ese usuario y clase, restricción idx_asistencia_unica).
+        """
         try:
             with self.db.get_connection() as conn:
                 conn.execute(
                     "INSERT INTO asistencia (idUsuario, idClase, confianza, estado) VALUES (?, ?, ?, ?)",
                     (idUsuario, idClase, confianza, estado),
                 )
-            return True
+            return ResultadoAsistencia.REGISTRADO
         except sqlite3.IntegrityError:
-            return False
+            return ResultadoAsistencia.YA_REGISTRADO
 
     def historial(self, idUsuario: int | None = None, idClase: int | None = None) -> list[dict]:
         query = "SELECT * FROM asistencia"
