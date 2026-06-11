@@ -16,13 +16,15 @@ class AdminPanel(BaseView):
 
         self.on_salir = on_salir
         self._vista_activa: str | None = None
+        self._activo = False
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         self._crear_sidebar()
         self._crear_vistas()
-        self._mostrar_vista("usuarios")
+        self._vista_activa = "usuarios"
+        self.vistas[self._vista_activa].tkraise()
 
     def _crear_sidebar(self) -> None:
         sidebar = ctk.CTkFrame(self, width=160, corner_radius=0)
@@ -56,20 +58,26 @@ class AdminPanel(BaseView):
             vista.grid(row=0, column=1, sticky="nsew")
 
     def _mostrar_vista(self, nombre: str) -> None:
-        if self._vista_activa is not None:
+        if nombre == self._vista_activa:
+            return
+
+        if self._activo and self._vista_activa is not None:
             self.vistas[self._vista_activa].on_hide()
 
         self._vista_activa = nombre
         vista = self.vistas[nombre]
         vista.tkraise()
-        vista.on_show()
+        if self._activo:
+            vista.on_show()
 
     # --- Ciclo de vida (llamado por App al cambiar de pantalla) ----------------
 
     def on_show(self) -> None:
+        self._activo = True
         if self._vista_activa is not None:
             self.vistas[self._vista_activa].on_show()
 
     def on_hide(self) -> None:
+        self._activo = False
         if self._vista_activa is not None:
             self.vistas[self._vista_activa].on_hide()
