@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Base de datos local (contiene datos personales/embeddings)
+data/*.db
+data/*.db-journal
+data/*.sqlite3
+
+# Modelos de dlib (pesados, se descargan aparte)
+models/*.dat
+
+# Logs
+logs/*.log
+
+# Entornos / config local
+.env

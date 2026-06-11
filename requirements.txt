@@ -1,0 +1,13 @@
+# Reconocimiento facial
+face_recognition==1.3.0
+dlib>=19.24.0
+
+# Visión por cámara (headless: no necesitamos cv2.imshow, la UI es CustomTkinter)
+opencv-python-headless>=4.8.0
+
+# Interfaz gráfica
+customtkinter>=5.2.0
+Pillow>=10.0.0
+
+# Utilidades
+numpy>=1.24.0
