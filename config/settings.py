@@ -22,6 +22,17 @@ FACE_MATCH_TOLERANCE = 0.45
 # Cantidad de "jitters" al generar el embedding (más = más preciso pero más lento)
 NUM_JITTERS = 1
 
+# --- Enrolamiento facial guiado (captura de frente / izquierda / derecha) -----
+# Cuántas detecciones válidas seguidas se necesitan para completar cada ángulo
+ENROLLMENT_FRAMES_REQUERIDOS = 8
+# Cada cuánto tiempo (segundos) se analiza un frame durante el enrolamiento
+ENROLLMENT_CHECK_INTERVAL_S = 0.3
+# |desplazamiento de la nariz| / (ancho entre ojos / 2) por debajo del cual se
+# considera que el rostro está de frente
+ENROLLMENT_YAW_FRONTAL = 0.18
+# por encima de este valor se considera que el rostro está girado hacia un lado
+ENROLLMENT_YAW_GIRO = 0.35
+
 # Metadatos guardados junto con cada embedding en la tabla "encoding"
 ENCODING_MODEL_NAME = "face_recognition_resnet_v1"
 ENCODING_DIMENSION = 128

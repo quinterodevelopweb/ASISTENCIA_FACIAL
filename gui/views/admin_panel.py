@@ -5,6 +5,7 @@ from typing import Callable
 import customtkinter as ctk
 
 from gui.views.base_view import BaseView
+from gui.views.catalogo_usuarios_view import CatalogoUsuariosView
 from gui.views.clases_view import ClasesView
 from gui.views.reportes_view import ReportesView
 from gui.views.usuarios_view import UsuariosView
@@ -37,6 +38,9 @@ class AdminPanel(BaseView):
         ctk.CTkButton(sidebar, text="Usuarios", command=lambda: self._mostrar_vista("usuarios")).pack(
             pady=5, padx=10, fill="x"
         )
+        ctk.CTkButton(sidebar, text="Catálogo", command=lambda: self._mostrar_vista("catalogo")).pack(
+            pady=5, padx=10, fill="x"
+        )
         ctk.CTkButton(sidebar, text="Clases", command=lambda: self._mostrar_vista("clases")).pack(
             pady=5, padx=10, fill="x"
         )
@@ -51,6 +55,7 @@ class AdminPanel(BaseView):
     def _crear_vistas(self) -> None:
         self.vistas: dict[str, BaseView] = {
             "usuarios": UsuariosView(self),
+            "catalogo": CatalogoUsuariosView(self),
             "clases": ClasesView(self),
             "reportes": ReportesView(self),
         }

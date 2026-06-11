@@ -1,4 +1,4 @@
-"""Catálogo de usuarios: alta de usuarios, captura de rostro e inscripción a clases."""
+"""Alta de usuarios: datos, inscripción a clases y captura guiada de rostro."""
 
 import sqlite3
 
@@ -7,8 +7,8 @@ from PIL import Image
 
 from config.settings import CAMERA_HEIGHT, CAMERA_WIDTH, SCAN_INTERVAL_MS
 from core.camera import Camera
-from core.face_encoder import get_single_face_encoding
 from gui.views.base_view import BaseView
+from gui.widgets.face_enrollment_widget import FaceEnrollmentWidget
 from services.clase_service import ClaseService
 from services.inscripcion_service import InscripcionService
 from services.usuario_service import UsuarioService
@@ -25,8 +25,6 @@ class UsuariosView(BaseView):
         self.camera = Camera()
         self._ctk_image: ctk.CTkImage | None = None
         self._after_id: str | None = None
-        self._ultimo_frame = None
-        self._encoding_capturado = None
 
         self._tipos_por_nombre: dict[str, int] = {}
         self._checks_clases: dict[int, ctk.BooleanVar] = {}
@@ -68,28 +66,21 @@ class UsuariosView(BaseView):
         self.video_label = ctk.CTkLabel(contenedor, text="")
         self.video_label.pack(pady=5)
 
-        self.label_captura = ctk.CTkLabel(contenedor, text="Rostro no capturado")
-        self.label_captura.pack(pady=5)
+        self.face_widget = FaceEnrollmentWidget(contenedor)
+        self.face_widget.pack(pady=5, padx=20, fill="x")
 
-        ctk.CTkButton(contenedor, text="Capturar rostro", command=self._capturar_rostro).pack(pady=5)
+        ctk.CTkButton(contenedor, text="Iniciar captura", command=self._iniciar_captura).pack(pady=5)
 
         self.label_mensaje = ctk.CTkLabel(contenedor, text="")
         self.label_mensaje.pack(pady=5)
 
         ctk.CTkButton(contenedor, text="Guardar usuario", command=self._guardar_usuario).pack(pady=10)
 
-        ctk.CTkLabel(contenedor, text="Usuarios registrados", font=ctk.CTkFont(size=16, weight="bold")).pack(
-            pady=(20, 5)
-        )
-        self.frame_lista = ctk.CTkFrame(contenedor)
-        self.frame_lista.pack(pady=5, padx=20, fill="x")
-
     # --- Ciclo de vida -----------------------------------------------------
 
     def on_show(self) -> None:
         self._cargar_tipos_usuario()
         self._cargar_clases()
-        self._cargar_usuarios()
         self.camera.start()
         self._actualizar_frame()
 
@@ -128,26 +119,11 @@ class UsuariosView(BaseView):
             ).pack(anchor="w", padx=10, pady=2)
             self._checks_clases[clase["idClase"]] = var
 
-    def _cargar_usuarios(self) -> None:
-        for widget in self.frame_lista.winfo_children():
-            widget.destroy()
-
-        usuarios = self.usuario_service.listar_usuarios()
-        if not usuarios:
-            ctk.CTkLabel(self.frame_lista, text="No hay usuarios registrados").pack(anchor="w", padx=10, pady=5)
-            return
-
-        for usuario in usuarios:
-            apellidos = " ".join(filter(None, [usuario["apPaterno"], usuario["apMaterno"]]))
-            texto = f"{usuario['nombre']} {apellidos} - {usuario['noCuenta'] or 's/n'}"
-            ctk.CTkLabel(self.frame_lista, text=texto).pack(anchor="w", padx=10, pady=2)
-
     # --- Cámara y captura de rostro -------------------------------------------
 
     def _actualizar_frame(self) -> None:
         frame = self.camera.read_frame_rgb()
         if frame is not None:
-            self._ultimo_frame = frame
             imagen_pil = Image.fromarray(frame)
             if self._ctk_image is None:
                 self._ctk_image = ctk.CTkImage(imagen_pil, size=(CAMERA_WIDTH, CAMERA_HEIGHT))
@@ -155,20 +131,12 @@ class UsuariosView(BaseView):
             else:
                 self._ctk_image.configure(light_image=imagen_pil)
 
+            self.face_widget.procesar_frame(frame)
+
         self._after_id = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
 
-    def _capturar_rostro(self) -> None:
-        if self._ultimo_frame is None:
-            self.label_captura.configure(text="Cámara no disponible")
-            return
-
-        encoding = get_single_face_encoding(self._ultimo_frame)
-        if encoding is None:
-            self.label_captura.configure(text="No se detectó ningún rostro, intenta de nuevo")
-            return
-
-        self._encoding_capturado = encoding
-        self.label_captura.configure(text="Rostro capturado correctamente")
+    def _iniciar_captura(self) -> None:
+        self.face_widget.iniciar()
 
     # --- Guardado --------------------------------------------------------------
 
@@ -180,8 +148,8 @@ class UsuariosView(BaseView):
             self.label_mensaje.configure(text="Nombre y apellido paterno son obligatorios", text_color="red")
             return
 
-        if self._encoding_capturado is None:
-            self.label_mensaje.configure(text="Captura el rostro del usuario antes de guardar", text_color="red")
+        if not self.face_widget.esta_completo():
+            self.label_mensaje.configure(text="Completa la captura de rostro antes de guardar", text_color="red")
             return
 
         idTipoUsuario = self._tipos_por_nombre.get(self.combo_tipo.get())
@@ -203,7 +171,7 @@ class UsuariosView(BaseView):
             self.label_mensaje.configure(text="Ya existe un usuario con ese número de cuenta", text_color="red")
             return
 
-        self.usuario_service.guardar_encoding(idUsuario, self._encoding_capturado)
+        self.usuario_service.guardar_encodings(idUsuario, self.face_widget.obtener_encodings())
 
         for idClase, var in self._checks_clases.items():
             if var.get():
@@ -211,7 +179,6 @@ class UsuariosView(BaseView):
 
         self.label_mensaje.configure(text=f"Usuario {nombre} {ap_paterno} guardado correctamente", text_color="green")
         self._limpiar_formulario()
-        self._cargar_usuarios()
 
     def _limpiar_formulario(self) -> None:
         for entry in (
@@ -227,5 +194,4 @@ class UsuariosView(BaseView):
         for var in self._checks_clases.values():
             var.set(False)
 
-        self._encoding_capturado = None
-        self.label_captura.configure(text="Rostro no capturado")
+        self.face_widget.reset()

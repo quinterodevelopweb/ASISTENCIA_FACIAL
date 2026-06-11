@@ -93,6 +93,16 @@ class UsuarioService:
                 ),
             )
 
+    def guardar_encodings(self, idUsuario: int, vectores: list[np.ndarray]) -> None:
+        for vector in vectores:
+            self.guardar_encoding(idUsuario, vector)
+
+    def reemplazar_encodings(self, idUsuario: int, vectores: list[np.ndarray]) -> None:
+        """Desactiva los encodings activos del usuario y guarda los nuevos."""
+        with self.db.get_connection() as conn:
+            conn.execute("UPDATE encoding SET estado = 0 WHERE idUsuario = ? AND estado = 1", (idUsuario,))
+        self.guardar_encodings(idUsuario, vectores)
+
     def obtener_encodings_activos(self) -> tuple[list[np.ndarray], list[int]]:
         """Devuelve los embeddings activos junto con el id de usuario asociado,
         listos para comparar con find_best_match()."""
