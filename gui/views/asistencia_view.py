@@ -1,6 +1,7 @@
 """Pantalla principal (modo Usuario): identifica al usuario por su rostro y,
 si lo reconoce, le permite elegir su clase para registrar asistencia."""
 
+import threading
 import time
 from typing import Callable
 
@@ -20,6 +21,9 @@ from config.settings import (
 from core.camera import Camera
 from gui.views.base_view import BaseView
 from services.asistencia_service import AsistenciaService, ResultadoAsistencia
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 ESCANEANDO = "ESCANEANDO"
 MOSTRANDO_RESULTADO = "MOSTRANDO_RESULTADO"
@@ -40,6 +44,19 @@ class AsistenciaView(BaseView):
         self._usuario_actual: dict | None = None
         self._confianza_actual: float = 0.0
         self._ultimo_intento: float = 0.0
+
+        # Recuadro que se dibuja sobre el rostro detectado (coordenadas del
+        # frame mostrado) y su color, junto con la escala usada para
+        # convertir las ubicaciones del frame reducido al frame completo.
+        self._ultima_ubicacion: tuple[int, int, int, int] | None = None
+        self._color_caja: tuple[int, int, int] = (0, 255, 0)
+        self._escala_reconocimiento: float = 1.0
+
+        # El reconocimiento facial se ejecuta en un hilo aparte para no
+        # bloquear ni romper el ciclo de actualización de video de Tkinter.
+        self._reconocimiento_lock = threading.Lock()
+        self._reconociendo = False
+        self._resultado_pendiente: tuple[str, dict | None] | None = None
 
         self._construir_ui(on_admin_click)
 
@@ -118,6 +135,9 @@ class AsistenciaView(BaseView):
         self._estado = ESCANEANDO
         self._usuario_actual = None
         self._ultimo_intento = 0.0
+        self._ultima_ubicacion = None
+        with self._reconocimiento_lock:
+            self._resultado_pendiente = None
         self.panel_identificacion.pack_forget()
         self.label_estado.configure(text="Colócate frente a la cámara para registrar tu asistencia")
         if not self.label_estado.winfo_ismapped():
@@ -131,13 +151,18 @@ class AsistenciaView(BaseView):
 
             if self._estado == ESCANEANDO:
                 ahora = time.monotonic()
-                if ahora - self._ultimo_intento >= RECOGNITION_INTERVAL_S:
+                if not self._reconociendo and ahora - self._ultimo_intento >= RECOGNITION_INTERVAL_S:
                     self._ultimo_intento = ahora
-                    self._procesar(frame)
+                    self._lanzar_reconocimiento(frame)
 
+        self._procesar_resultado_pendiente()
         self._after_id_frame = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
 
     def _mostrar_frame(self, frame_rgb) -> None:
+        if self._ultima_ubicacion is not None:
+            top, right, bottom, left = self._ultima_ubicacion
+            cv2.rectangle(frame_rgb, (left, top), (right, bottom), self._color_caja, 2)
+
         imagen_pil = Image.fromarray(frame_rgb)
         if self._ctk_image is None:
             self._ctk_image = ctk.CTkImage(imagen_pil, size=(CAMERA_WIDTH, CAMERA_HEIGHT))
@@ -145,23 +170,62 @@ class AsistenciaView(BaseView):
         else:
             self._ctk_image.configure(light_image=imagen_pil)
 
-    def _procesar(self, frame_rgb) -> None:
+    # --- Reconocimiento (en hilo aparte) ---------------------------------------
+
+    def _lanzar_reconocimiento(self, frame_rgb) -> None:
         height, width = frame_rgb.shape[:2]
         scale = RECOGNITION_WIDTH / width
+        self._escala_reconocimiento = 1.0 / scale
         frame_pequeno = cv2.resize(frame_rgb, (RECOGNITION_WIDTH, int(height * scale)), interpolation=cv2.INTER_AREA)
-        resultado, datos = self.asistencia_service.identificar(frame_pequeno)
+
+        self._reconociendo = True
+
+        def trabajo() -> None:
+            try:
+                resultado, datos = self.asistencia_service.identificar(frame_pequeno)
+            except Exception:
+                logger.exception("Error al identificar rostro")
+                resultado, datos = ResultadoAsistencia.ERROR, None
+            with self._reconocimiento_lock:
+                self._resultado_pendiente = (resultado, datos)
+            self._reconociendo = False
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def _procesar_resultado_pendiente(self) -> None:
+        with self._reconocimiento_lock:
+            pendiente = self._resultado_pendiente
+            self._resultado_pendiente = None
+
+        if pendiente is None or self._estado != ESCANEANDO:
+            return
+
+        resultado, datos = pendiente
+
+        if datos is not None and datos.get("location") is not None:
+            self._ultima_ubicacion = self._escalar_ubicacion(datos["location"])
+            self._color_caja = (
+                (0, 255, 0) if resultado == ResultadoAsistencia.IDENTIFICADO else (255, 140, 0)
+            )
+        else:
+            self._ultima_ubicacion = None
 
         if resultado == ResultadoAsistencia.SIN_ROSTRO:
             self.label_estado.configure(text="Buscando rostro... acércate y mira a la cámara")
-            return
-
-        if resultado == ResultadoAsistencia.NO_IDENTIFICADO:
+        elif resultado == ResultadoAsistencia.ERROR:
+            self.label_estado.configure(text="Error al procesar el rostro, intenta de nuevo")
+        elif resultado == ResultadoAsistencia.NO_IDENTIFICADO:
             self._mostrar_resultado_temporal("Rostro detectado, pero no coincide con ningún usuario registrado")
         elif resultado == ResultadoAsistencia.SIN_CLASES:
             usuario = datos["usuario"]
             self._mostrar_resultado_temporal(f"{usuario['nombre']}: no tienes clases asignadas")
         elif resultado == ResultadoAsistencia.IDENTIFICADO:
             self._mostrar_seleccion_clase(datos)
+
+    def _escalar_ubicacion(self, location: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+        top, right, bottom, left = location
+        e = self._escala_reconocimiento
+        return (int(top * e), int(right * e), int(bottom * e), int(left * e))
 
     # --- Resultados temporales -----------------------------------------------
 

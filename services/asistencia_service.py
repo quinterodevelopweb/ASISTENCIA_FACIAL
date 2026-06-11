@@ -18,6 +18,7 @@ class ResultadoAsistencia:
     IDENTIFICADO = "IDENTIFICADO"  # usuario reconocido, debe elegir su clase
     YA_REGISTRADO = "YA_REGISTRADO"  # ya existe un registro de hoy para usuario+clase
     REGISTRADO = "REGISTRADO"  # asistencia registrada con éxito
+    ERROR = "ERROR"  # ocurrió un error inesperado al procesar el frame
 
 
 class AsistenciaService:
@@ -41,7 +42,7 @@ class AsistenciaService:
           - IDENTIFICADO: usuario reconocido; datos incluye "usuario", "confianza" y "clases"
             (las clases en las que está inscrito, para que elija una).
         """
-        encoding = get_single_face_encoding(frame_rgb)
+        encoding, location = get_single_face_encoding(frame_rgb)
         if encoding is None:
             return ResultadoAsistencia.SIN_ROSTRO, None
 
@@ -50,15 +51,20 @@ class AsistenciaService:
         confianza = distance_to_confidence(distance)
 
         if idUsuario is None:
-            return ResultadoAsistencia.NO_IDENTIFICADO, {"confianza": confianza}
+            return ResultadoAsistencia.NO_IDENTIFICADO, {"confianza": confianza, "location": location}
 
         usuario = self.usuarios.obtener_usuario(idUsuario)
         clases = self.inscripciones.listar_clases_de_usuario(idUsuario)
 
         if not clases:
-            return ResultadoAsistencia.SIN_CLASES, {"usuario": usuario, "confianza": confianza}
+            return ResultadoAsistencia.SIN_CLASES, {"usuario": usuario, "confianza": confianza, "location": location}
 
-        return ResultadoAsistencia.IDENTIFICADO, {"usuario": usuario, "confianza": confianza, "clases": clases}
+        return ResultadoAsistencia.IDENTIFICADO, {
+            "usuario": usuario,
+            "confianza": confianza,
+            "clases": clases,
+            "location": location,
+        }
 
     def registrar_asistencia(self, idUsuario: int, idClase: int, confianza: float, estado: str = "PRESENTE") -> str:
         """Registra la asistencia de un usuario ya identificado en la clase elegida.
