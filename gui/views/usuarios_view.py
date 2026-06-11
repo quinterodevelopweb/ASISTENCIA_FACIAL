@@ -23,6 +23,7 @@ class UsuariosView(BaseView):
         self.inscripcion_service = InscripcionService()
 
         self.camera = Camera()
+        self._ctk_image: ctk.CTkImage | None = None
         self._after_id: str | None = None
         self._ultimo_frame = None
         self._encoding_capturado = None
@@ -147,8 +148,12 @@ class UsuariosView(BaseView):
         frame = self.camera.read_frame_rgb()
         if frame is not None:
             self._ultimo_frame = frame
-            imagen = ctk.CTkImage(Image.fromarray(frame), size=(CAMERA_WIDTH, CAMERA_HEIGHT))
-            self.video_label.configure(image=imagen, text="")
+            imagen_pil = Image.fromarray(frame)
+            if self._ctk_image is None:
+                self._ctk_image = ctk.CTkImage(imagen_pil, size=(CAMERA_WIDTH, CAMERA_HEIGHT))
+                self.video_label.configure(image=self._ctk_image, text="")
+            else:
+                self._ctk_image.configure(light_image=imagen_pil)
 
         self._after_id = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
 

@@ -29,16 +29,22 @@ ENCODING_DIMENSION = 128
 # Detección de movimiento (vista de Asistencia)
 MOTION_THRESHOLD = 25
 MOTION_MIN_AREA_RATIO = 0.02
+# Ancho (px) al que se reduce el frame solo para calcular el movimiento (más rápido)
+MOTION_DETECTION_WIDTH = 160
+
+# Ancho (px) al que se reduce el frame solo para el reconocimiento facial (más rápido)
+RECOGNITION_WIDTH = 320
 
 # Frecuencia de captura de frames (ms) y tiempo que se muestra un resultado
 # antes de reanudar el escaneo
-SCAN_INTERVAL_MS = 200
+SCAN_INTERVAL_MS = 40
 RESULT_DISPLAY_MS = 3000
 
 # Cámara
 CAMERA_INDEX = 0
-CAMERA_WIDTH = 320
-CAMERA_HEIGHT = 240
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+CAMERA_FPS = 30
 
 # Interfaz
 APP_TITLE = "Sistema de Asistencia Facial"

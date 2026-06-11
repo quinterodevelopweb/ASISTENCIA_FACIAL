@@ -4,10 +4,18 @@ asistencia."""
 
 from typing import Callable
 
+import cv2
 import customtkinter as ctk
 from PIL import Image
 
-from config.settings import APP_TITLE, CAMERA_HEIGHT, CAMERA_WIDTH, RESULT_DISPLAY_MS, SCAN_INTERVAL_MS
+from config.settings import (
+    APP_TITLE,
+    CAMERA_HEIGHT,
+    CAMERA_WIDTH,
+    RECOGNITION_WIDTH,
+    RESULT_DISPLAY_MS,
+    SCAN_INTERVAL_MS,
+)
 from core.camera import Camera
 from core.motion_detector import MotionDetector
 from gui.views.base_view import BaseView
@@ -26,6 +34,7 @@ class AsistenciaView(BaseView):
         self.motion_detector = MotionDetector()
         self.asistencia_service = AsistenciaService()
 
+        self._ctk_image: ctk.CTkImage | None = None
         self._after_id_frame: str | None = None
         self._after_id_resultado: str | None = None
         self._estado = ESCANEANDO
@@ -98,11 +107,18 @@ class AsistenciaView(BaseView):
         self._after_id_frame = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
 
     def _mostrar_frame(self, frame_rgb) -> None:
-        imagen = ctk.CTkImage(Image.fromarray(frame_rgb), size=(CAMERA_WIDTH, CAMERA_HEIGHT))
-        self.video_label.configure(image=imagen, text="")
+        imagen_pil = Image.fromarray(frame_rgb)
+        if self._ctk_image is None:
+            self._ctk_image = ctk.CTkImage(imagen_pil, size=(CAMERA_WIDTH, CAMERA_HEIGHT))
+            self.video_label.configure(image=self._ctk_image, text="")
+        else:
+            self._ctk_image.configure(light_image=imagen_pil)
 
     def _procesar(self, frame_rgb) -> None:
-        resultado, datos = self.asistencia_service.identificar(frame_rgb)
+        height, width = frame_rgb.shape[:2]
+        scale = RECOGNITION_WIDTH / width
+        frame_pequeno = cv2.resize(frame_rgb, (RECOGNITION_WIDTH, int(height * scale)), interpolation=cv2.INTER_AREA)
+        resultado, datos = self.asistencia_service.identificar(frame_pequeno)
 
         if resultado == ResultadoAsistencia.SIN_ROSTRO:
             return

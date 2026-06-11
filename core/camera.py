@@ -3,22 +3,33 @@
 import cv2
 import numpy as np
 
-from config.settings import CAMERA_HEIGHT, CAMERA_INDEX, CAMERA_WIDTH
+from config.settings import CAMERA_FPS, CAMERA_HEIGHT, CAMERA_INDEX, CAMERA_WIDTH
 
 
 class Camera:
     """Wrapper sobre cv2.VideoCapture con resolución reducida para optimizar la Pi."""
 
-    def __init__(self, index: int = CAMERA_INDEX, width: int = CAMERA_WIDTH, height: int = CAMERA_HEIGHT):
+    def __init__(
+        self,
+        index: int = CAMERA_INDEX,
+        width: int = CAMERA_WIDTH,
+        height: int = CAMERA_HEIGHT,
+        fps: int = CAMERA_FPS,
+    ):
         self.index = index
         self.width = width
         self.height = height
+        self.fps = fps
         self._cap: cv2.VideoCapture | None = None
 
     def start(self) -> None:
         self._cap = cv2.VideoCapture(self.index)
+        # MJPG reduce el ancho de banda USB necesario, permitiendo más FPS a mayor resolución
+        self._cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        self._cap.set(cv2.CAP_PROP_FPS, self.fps)
+        self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     def read_frame_rgb(self) -> np.ndarray | None:
         """Devuelve el frame actual en formato RGB (el que espera face_recognition)."""
