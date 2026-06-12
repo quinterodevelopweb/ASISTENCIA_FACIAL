@@ -147,6 +147,16 @@ class AsistenciaView(BaseView):
             command=self._mostrar_paso_clase,
         ).pack(pady=(0, 10))
 
+        # Visible en cualquier paso: permite liberar la cámara para que escanee
+        # otro usuario sin esperar a que se cierre el panel solo.
+        ctk.CTkButton(
+            self.panel_identificacion,
+            text="Volver a escanear",
+            fg_color="transparent",
+            border_width=1,
+            command=self._reset,
+        ).pack(pady=(0, 10))
+
     # --- Ciclo de vida -----------------------------------------------------
 
     def on_show(self) -> None:
