@@ -11,12 +11,12 @@ from PIL import Image
 
 from config.settings import (
     APP_TITLE,
-    CAMERA_HEIGHT,
-    CAMERA_WIDTH,
     RECOGNITION_INTERVAL_S,
     RECOGNITION_WIDTH,
     RESULT_DISPLAY_MS,
     SCAN_INTERVAL_MS,
+    VIDEO_DISPLAY_HEIGHT,
+    VIDEO_DISPLAY_WIDTH,
 )
 from core.camera import Camera
 from gui.views.base_view import BaseView
@@ -73,17 +73,30 @@ class AsistenciaView(BaseView):
 
         ctk.CTkLabel(self, text=APP_TITLE, font=ctk.CTkFont(size=20, weight="bold")).pack(pady=5)
 
-        self.video_label = ctk.CTkLabel(self, text="")
-        self.video_label.pack(pady=5, expand=True, fill="both")
+        # Contenedor del video: el mensaje de estado y el panel de
+        # identificación se SUPERPONEN sobre el video (con place) en vez de
+        # apilarse debajo (con pack), para que siempre sean visibles sin
+        # importar el tamaño de la ventana.
+        self.frame_video = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_video.pack(expand=True, fill="both", padx=5, pady=5)
+
+        self.video_label = ctk.CTkLabel(self.frame_video, text="")
+        self.video_label.place(relx=0.5, rely=0.5, anchor="center")
 
         self.label_estado = ctk.CTkLabel(
-            self, text="Colócate frente a la cámara para registrar tu asistencia", font=ctk.CTkFont(size=14)
+            self.frame_video,
+            text="Colócate frente a la cámara para registrar tu asistencia",
+            font=ctk.CTkFont(size=14),
+            fg_color=("gray85", "gray17"),
+            corner_radius=8,
+            padx=10,
+            pady=6,
         )
-        self.label_estado.pack(pady=5)
+        self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
 
         # Panel mostrado al identificar a un usuario: confirmación, sus datos
         # y la lista de clases en las que está inscrito para elegir una.
-        self.panel_identificacion = ctk.CTkFrame(self)
+        self.panel_identificacion = ctk.CTkFrame(self.frame_video)
 
         ctk.CTkLabel(
             self.panel_identificacion,
@@ -138,22 +151,25 @@ class AsistenciaView(BaseView):
         self._ultima_ubicacion = None
         with self._reconocimiento_lock:
             self._resultado_pendiente = None
-        self.panel_identificacion.pack_forget()
+        self.panel_identificacion.place_forget()
         self.label_estado.configure(text="Colócate frente a la cámara para registrar tu asistencia")
         if not self.label_estado.winfo_ismapped():
-            self.label_estado.pack(pady=5)
+            self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
         self._limpiar_botones_clases()
 
     def _actualizar_frame(self) -> None:
         frame = self.camera.read_frame_rgb()
         if frame is not None:
-            self._mostrar_frame(frame)
-
+            # Lanzar el reconocimiento sobre el frame limpio (sin el recuadro
+            # dibujado encima) antes de mostrarlo: _mostrar_frame() dibuja el
+            # recuadro directamente sobre este array.
             if self._estado == ESCANEANDO:
                 ahora = time.monotonic()
                 if not self._reconociendo and ahora - self._ultimo_intento >= RECOGNITION_INTERVAL_S:
                     self._ultimo_intento = ahora
                     self._lanzar_reconocimiento(frame)
+
+            self._mostrar_frame(frame)
 
         self._procesar_resultado_pendiente()
         self._after_id_frame = self.after(SCAN_INTERVAL_MS, self._actualizar_frame)
@@ -165,7 +181,7 @@ class AsistenciaView(BaseView):
 
         imagen_pil = Image.fromarray(frame_rgb)
         if self._ctk_image is None:
-            self._ctk_image = ctk.CTkImage(imagen_pil, size=(CAMERA_WIDTH, CAMERA_HEIGHT))
+            self._ctk_image = ctk.CTkImage(imagen_pil, size=(VIDEO_DISPLAY_WIDTH, VIDEO_DISPLAY_HEIGHT))
             self.video_label.configure(image=self._ctk_image, text="")
         else:
             self._ctk_image.configure(light_image=imagen_pil)
@@ -179,10 +195,15 @@ class AsistenciaView(BaseView):
         frame_pequeno = cv2.resize(frame_rgb, (RECOGNITION_WIDTH, int(height * scale)), interpolation=cv2.INTER_AREA)
 
         self._reconociendo = True
+        self.label_estado.configure(text="Escaneando...")
 
         def trabajo() -> None:
             try:
                 resultado, datos = self.asistencia_service.identificar(frame_pequeno)
+                if datos is not None and "confianza" in datos:
+                    logger.info("Reconocimiento: %s (confianza=%.3f)", resultado, datos["confianza"])
+                else:
+                    logger.info("Reconocimiento: %s", resultado)
             except Exception:
                 logger.exception("Error al identificar rostro")
                 resultado, datos = ResultadoAsistencia.ERROR, None
@@ -215,7 +236,10 @@ class AsistenciaView(BaseView):
         elif resultado == ResultadoAsistencia.ERROR:
             self.label_estado.configure(text="Error al procesar el rostro, intenta de nuevo")
         elif resultado == ResultadoAsistencia.NO_IDENTIFICADO:
-            self._mostrar_resultado_temporal("Rostro detectado, pero no coincide con ningún usuario registrado")
+            self._mostrar_resultado_temporal(
+                f"Rostro detectado, pero no coincide con ningún usuario registrado "
+                f"(confianza {datos['confianza']:.2f})"
+            )
         elif resultado == ResultadoAsistencia.SIN_CLASES:
             usuario = datos["usuario"]
             self._mostrar_resultado_temporal(f"{usuario['nombre']}: no tienes clases asignadas")
@@ -231,10 +255,10 @@ class AsistenciaView(BaseView):
 
     def _mostrar_resultado_temporal(self, mensaje: str) -> None:
         self._estado = MOSTRANDO_RESULTADO
-        self.panel_identificacion.pack_forget()
+        self.panel_identificacion.place_forget()
         self._limpiar_botones_clases()
         if not self.label_estado.winfo_ismapped():
-            self.label_estado.pack(pady=5)
+            self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
         self.label_estado.configure(text=mensaje)
         self._after_id_resultado = self.after(RESULT_DISPLAY_MS, self._reset)
 
@@ -258,8 +282,8 @@ class AsistenciaView(BaseView):
                 command=lambda idClase=clase["idClase"]: self._registrar(idClase),
             ).pack(pady=2, fill="x")
 
-        self.label_estado.pack_forget()
-        self.panel_identificacion.pack(pady=10, padx=20, fill="x")
+        self.label_estado.place_forget()
+        self.panel_identificacion.place(relx=0.5, rely=1.0, anchor="s", relwidth=0.95, y=-10)
 
     def _registrar(self, idClase: int) -> None:
         resultado = self.asistencia_service.registrar_asistencia(

@@ -17,7 +17,7 @@ SCHEMA_PATH = BASE_DIR / "database" / "schema.sql"
 FACE_DETECTION_MODEL = "hog"
 
 # Umbral de distancia para considerar una coincidencia (menor = más estricto)
-FACE_MATCH_TOLERANCE = 0.45
+FACE_MATCH_TOLERANCE = 0.5
 
 # Cantidad de "jitters" al generar el embedding (más = más preciso pero más lento)
 NUM_JITTERS = 1
@@ -56,6 +56,13 @@ CAMERA_INDEX = 0
 CAMERA_WIDTH = 800
 CAMERA_HEIGHT = 600
 CAMERA_FPS = 30
+
+# Tamaño al que se muestra el video en la pantalla de asistencia (independiente
+# de la resolución de captura). La ventana mide 800x480, así que el video debe
+# ser más pequeño que CAMERA_HEIGHT para dejar espacio al mensaje de estado y
+# al panel de identificación, que se superponen sobre el video.
+VIDEO_DISPLAY_WIDTH = 480
+VIDEO_DISPLAY_HEIGHT = 360
 
 # Interfaz
 APP_TITLE = "Sistema de Asistencia Facial"
