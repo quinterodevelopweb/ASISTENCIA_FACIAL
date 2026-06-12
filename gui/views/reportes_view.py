@@ -1,5 +1,7 @@
 """Vista de reportes/historial de asistencia."""
 
+from datetime import datetime
+
 import customtkinter as ctk
 
 from gui.views.base_view import BaseView
@@ -50,9 +52,18 @@ class ReportesView(BaseView):
             return
 
         for registro in registros:
-            confianza = f"{registro['confianza']:.2f}" if registro["confianza"] is not None else "-"
+            apellidos = " ".join(filter(None, [registro["apPaterno"], registro["apMaterno"]]))
+            fecha_hora = self._formatear_fecha_hora(registro["fechaHora"])
             texto = (
-                f"{registro['fechaHora']} | usuario #{registro['idUsuario']} | "
-                f"clase #{registro['idClase']} | {registro['estado']} | confianza {confianza}"
+                f"{fecha_hora} | {registro['nombre']} {apellidos} | "
+                f"{registro['nombreClase']} ({registro['periodoClase']}) | {registro['estado']}"
             )
             ctk.CTkLabel(self.tabla, text=texto).pack(anchor="w", padx=10, pady=2)
+
+    @staticmethod
+    def _formatear_fecha_hora(fecha_hora: str) -> str:
+        try:
+            dt = datetime.strptime(fecha_hora, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return fecha_hora
+        return dt.strftime("%d/%m/%Y %H:%M")

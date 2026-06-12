@@ -75,7 +75,8 @@ class AsistenciaService:
         try:
             with self.db.get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO asistencia (idUsuario, idClase, confianza, estado) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO asistencia (idUsuario, idClase, fechaHora, confianza, estado) "
+                    "VALUES (?, ?, datetime('now', 'localtime'), ?, ?)",
                     (idUsuario, idClase, confianza, estado),
                 )
             return ResultadoAsistencia.REGISTRADO
@@ -83,20 +84,35 @@ class AsistenciaService:
             return ResultadoAsistencia.YA_REGISTRADO
 
     def historial(self, idUsuario: int | None = None, idClase: int | None = None) -> list[dict]:
-        query = "SELECT * FROM asistencia"
+        query = """
+            SELECT
+                a.idAsistencia,
+                a.fechaHora,
+                a.estado,
+                a.idUsuario,
+                a.idClase,
+                u.nombre,
+                u.apPaterno,
+                u.apMaterno,
+                c.nombreClase,
+                c.periodoClase
+            FROM asistencia a
+            JOIN usuarios u ON u.idUsuario = a.idUsuario
+            JOIN clases c ON c.idClase = a.idClase
+        """
         condiciones = []
         params: list = []
 
         if idUsuario is not None:
-            condiciones.append("idUsuario = ?")
+            condiciones.append("a.idUsuario = ?")
             params.append(idUsuario)
         if idClase is not None:
-            condiciones.append("idClase = ?")
+            condiciones.append("a.idClase = ?")
             params.append(idClase)
 
         if condiciones:
             query += " WHERE " + " AND ".join(condiciones)
-        query += " ORDER BY fechaHora DESC"
+        query += " ORDER BY a.fechaHora DESC"
 
         with self.db.get_connection() as conn:
             rows = conn.execute(query, params).fetchall()
