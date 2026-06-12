@@ -1,4 +1,4 @@
-"""Lógica de reconocimiento facial y registro de asistencia."""
+"""Lóoogica de reconocimiento facial y registro de asistencia."""
 
 import sqlite3
 
