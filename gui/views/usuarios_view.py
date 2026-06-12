@@ -38,44 +38,66 @@ class UsuariosView(BaseView):
 
         ctk.CTkLabel(contenedor, text="Registro de Usuarios", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=10)
 
-        self.combo_tipo = ctk.CTkComboBox(contenedor, values=["Cargando..."])
+        self.combo_tipo = ctk.CTkComboBox(contenedor, values=["Cargando..."], command=self._on_tipo_cambiado)
         self.combo_tipo.pack(pady=5, padx=20, fill="x")
 
         self.entry_no_cuenta = ctk.CTkEntry(contenedor, placeholder_text="No. de cuenta")
-        self.entry_no_cuenta.pack(pady=5, padx=20, fill="x")
-
         self.entry_nombre = ctk.CTkEntry(contenedor, placeholder_text="Nombre")
-        self.entry_nombre.pack(pady=5, padx=20, fill="x")
-
         self.entry_ap_paterno = ctk.CTkEntry(contenedor, placeholder_text="Apellido paterno")
-        self.entry_ap_paterno.pack(pady=5, padx=20, fill="x")
-
         self.entry_ap_materno = ctk.CTkEntry(contenedor, placeholder_text="Apellido materno")
-        self.entry_ap_materno.pack(pady=5, padx=20, fill="x")
-
         self.entry_email = ctk.CTkEntry(contenedor, placeholder_text="Email")
-        self.entry_email.pack(pady=5, padx=20, fill="x")
-
         self.entry_telefono = ctk.CTkEntry(contenedor, placeholder_text="Teléfono")
-        self.entry_telefono.pack(pady=5, padx=20, fill="x")
 
-        ctk.CTkLabel(contenedor, text="Clases inscritas").pack(pady=(15, 5))
+        # Solo se muestra y se guarda cuando el tipo de usuario es "Profesor":
+        # contraseña de acceso al panel de Profesor (junto con el no. de cuenta).
+        self.entry_password = ctk.CTkEntry(
+            contenedor, placeholder_text="Contraseña del panel de Profesor", show="*"
+        )
+
+        self.label_clases_titulo = ctk.CTkLabel(contenedor, text="Clases inscritas")
         self.frame_clases = ctk.CTkFrame(contenedor)
-        self.frame_clases.pack(pady=5, padx=20, fill="x")
 
-        ctk.CTkLabel(contenedor, text="Captura de rostro").pack(pady=(15, 5))
+        self.label_captura_titulo = ctk.CTkLabel(contenedor, text="Captura de rostro")
         self.video_label = ctk.CTkLabel(contenedor, text="")
-        self.video_label.pack(pady=5)
-
         self.face_widget = FaceEnrollmentWidget(contenedor)
-        self.face_widget.pack(pady=5, padx=20, fill="x")
-
-        ctk.CTkButton(contenedor, text="Iniciar captura", command=self._iniciar_captura).pack(pady=5)
+        self.btn_iniciar_captura = ctk.CTkButton(contenedor, text="Iniciar captura", command=self._iniciar_captura)
 
         self.label_mensaje = ctk.CTkLabel(contenedor, text="")
-        self.label_mensaje.pack(pady=5)
+        self.btn_guardar = ctk.CTkButton(contenedor, text="Guardar usuario", command=self._guardar_usuario)
 
-        ctk.CTkButton(contenedor, text="Guardar usuario", command=self._guardar_usuario).pack(pady=10)
+        # Orden visual del formulario; entry_password solo se incluye cuando
+        # el tipo de usuario seleccionado es "Profesor" (ver _repack_formulario).
+        self._widgets_orden = [
+            (self.entry_no_cuenta, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.entry_nombre, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.entry_ap_paterno, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.entry_ap_materno, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.entry_email, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.entry_telefono, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.entry_password, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.label_clases_titulo, {"pady": (15, 5)}),
+            (self.frame_clases, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.label_captura_titulo, {"pady": (15, 5)}),
+            (self.video_label, {"pady": 5}),
+            (self.face_widget, {"pady": 5, "padx": 20, "fill": "x"}),
+            (self.btn_iniciar_captura, {"pady": 5}),
+            (self.label_mensaje, {"pady": 5}),
+            (self.btn_guardar, {"pady": 10}),
+        ]
+        self._repack_formulario()
+
+    def _repack_formulario(self) -> None:
+        es_profesor = self.combo_tipo.get() == "Profesor"
+        for widget, pack_kwargs in self._widgets_orden:
+            widget.pack_forget()
+            if widget is self.entry_password and not es_profesor:
+                continue
+            widget.pack(**pack_kwargs)
+
+    def _on_tipo_cambiado(self, _seleccion: str) -> None:
+        if self.combo_tipo.get() != "Profesor":
+            self.entry_password.delete(0, "end")
+        self._repack_formulario()
 
     # --- Ciclo de vida -----------------------------------------------------
 
@@ -100,6 +122,7 @@ class UsuariosView(BaseView):
         valores = list(self._tipos_por_nombre) or ["Sin tipos registrados"]
         self.combo_tipo.configure(values=valores)
         self.combo_tipo.set(valores[0])
+        self._repack_formulario()
 
     def _cargar_clases(self) -> None:
         for widget in self.frame_clases.winfo_children():
@@ -169,6 +192,13 @@ class UsuariosView(BaseView):
             self.label_mensaje.configure(text="Selecciona un tipo de usuario válido", text_color="red")
             return
 
+        password = self.entry_password.get().strip() or None
+        if self.combo_tipo.get() == "Profesor" and (not self.entry_no_cuenta.get().strip() or not password):
+            self.label_mensaje.configure(
+                text="Captura no. de cuenta y contraseña para el panel de Profesor", text_color="red"
+            )
+            return
+
         try:
             idUsuario = self.usuario_service.crear_usuario(
                 tipoUsuario=idTipoUsuario,
@@ -178,6 +208,7 @@ class UsuariosView(BaseView):
                 noCuenta=self.entry_no_cuenta.get().strip() or None,
                 email=self.entry_email.get().strip() or None,
                 telefono=self.entry_telefono.get().strip() or None,
+                password=password if self.combo_tipo.get() == "Profesor" else None,
             )
         except sqlite3.IntegrityError:
             self.label_mensaje.configure(text="Ya existe un usuario con ese número de cuenta", text_color="red")
@@ -200,6 +231,7 @@ class UsuariosView(BaseView):
             self.entry_ap_materno,
             self.entry_email,
             self.entry_telefono,
+            self.entry_password,
         ):
             entry.delete(0, "end")
 

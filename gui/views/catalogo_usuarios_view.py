@@ -51,13 +51,19 @@ class CatalogoUsuariosView(BaseView):
         self.label_sin_seleccion = ctk.CTkLabel(self.frame_edicion, text="Selecciona un usuario de la lista")
         self.label_sin_seleccion.pack(pady=20)
 
-        self.combo_tipo = ctk.CTkComboBox(self.frame_edicion, values=["Cargando..."])
+        self.combo_tipo = ctk.CTkComboBox(self.frame_edicion, values=["Cargando..."], command=self._on_tipo_cambiado)
         self.entry_no_cuenta = ctk.CTkEntry(self.frame_edicion, placeholder_text="No. de cuenta")
         self.entry_nombre = ctk.CTkEntry(self.frame_edicion, placeholder_text="Nombre")
         self.entry_ap_paterno = ctk.CTkEntry(self.frame_edicion, placeholder_text="Apellido paterno")
         self.entry_ap_materno = ctk.CTkEntry(self.frame_edicion, placeholder_text="Apellido materno")
         self.entry_email = ctk.CTkEntry(self.frame_edicion, placeholder_text="Email")
         self.entry_telefono = ctk.CTkEntry(self.frame_edicion, placeholder_text="Teléfono")
+
+        # Solo se muestra cuando el tipo de usuario es "Profesor": contraseña de
+        # acceso al panel de Profesor (junto con el no. de cuenta).
+        self.entry_password = ctk.CTkEntry(
+            self.frame_edicion, placeholder_text="Contraseña del panel de Profesor", show="*"
+        )
 
         self.label_clases = ctk.CTkLabel(self.frame_edicion, text="Clases inscritas")
         self.frame_clases = ctk.CTkFrame(self.frame_edicion)
@@ -90,6 +96,7 @@ class CatalogoUsuariosView(BaseView):
             self.entry_ap_materno,
             self.entry_email,
             self.entry_telefono,
+            self.entry_password,
             self.label_clases,
             self.frame_clases,
             self.label_rostro,
@@ -164,14 +171,29 @@ class CatalogoUsuariosView(BaseView):
         self._set_entry(self.entry_ap_materno, usuario["apMaterno"])
         self._set_entry(self.entry_email, usuario["email"])
         self._set_entry(self.entry_telefono, usuario["telefono"])
+        self._set_entry(self.entry_password, usuario["password"])
 
         self._cargar_clases_checkboxes(idUsuario)
         self.face_widget.reset()
         self.label_mensaje.configure(text="")
 
         self.label_sin_seleccion.pack_forget()
+        self._repack_formulario_edicion()
+
+    def _repack_formulario_edicion(self) -> None:
+        es_profesor = self.combo_tipo.get() == "Profesor"
         for widget in self._widgets_formulario:
+            widget.pack_forget()
+            if widget is self.entry_password and not es_profesor:
+                continue
             widget.pack(pady=5, padx=20, fill="x")
+
+    def _on_tipo_cambiado(self, _seleccion: str) -> None:
+        if self._idUsuario_actual is None:
+            return
+        if self.combo_tipo.get() != "Profesor":
+            self.entry_password.delete(0, "end")
+        self._repack_formulario_edicion()
 
     @staticmethod
     def _set_entry(entry: ctk.CTkEntry, valor) -> None:
@@ -240,6 +262,13 @@ class CatalogoUsuariosView(BaseView):
             self.label_mensaje.configure(text="Selecciona un tipo de usuario válido", text_color="red")
             return
 
+        password = self.entry_password.get().strip() or None
+        if self.combo_tipo.get() == "Profesor" and (not self.entry_no_cuenta.get().strip() or not password):
+            self.label_mensaje.configure(
+                text="Captura no. de cuenta y contraseña para el panel de Profesor", text_color="red"
+            )
+            return
+
         if self.face_widget.esta_completo():
             usuario_duplicado = self.usuario_service.buscar_usuario_por_rostro(
                 self.face_widget.obtener_encodings(), excluir_idUsuario=self._idUsuario_actual
@@ -261,6 +290,7 @@ class CatalogoUsuariosView(BaseView):
                 apMaterno=self.entry_ap_materno.get().strip() or None,
                 email=self.entry_email.get().strip() or None,
                 telefono=self.entry_telefono.get().strip() or None,
+                password=password if self.combo_tipo.get() == "Profesor" else None,
             )
         except sqlite3.IntegrityError:
             self.label_mensaje.configure(text="Ya existe un usuario con ese número de cuenta", text_color="red")

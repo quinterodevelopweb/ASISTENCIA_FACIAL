@@ -15,6 +15,7 @@ CAMPOS_ACTUALIZABLES_USUARIO = {
     "apMaterno",
     "email",
     "telefono",
+    "password",
     "estado",
 }
 
@@ -41,13 +42,14 @@ class UsuarioService:
         noCuenta: str | None = None,
         email: str | None = None,
         telefono: str | None = None,
+        password: str | None = None,
     ) -> int:
         with self.db.get_connection() as conn:
             cursor = conn.execute(
                 """INSERT INTO usuarios
-                   (tipoUsuario, noCuenta, nombre, apPaterno, apMaterno, email, telefono)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (tipoUsuario, noCuenta, nombre, apPaterno, apMaterno, email, telefono),
+                   (tipoUsuario, noCuenta, nombre, apPaterno, apMaterno, email, telefono, password)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (tipoUsuario, noCuenta, nombre, apPaterno, apMaterno, email, telefono, password),
             )
             return cursor.lastrowid
 
@@ -122,6 +124,20 @@ class UsuarioService:
         vectores = [self.db.blob_to_encoding(row["vector"]) for row in rows]
         ids = [row["idUsuario"] for row in rows]
         return vectores, ids
+
+    def autenticar_profesor(self, noCuenta: str, password: str) -> dict | None:
+        """Verifica las credenciales (no. de cuenta + contraseña) de un profesor
+        para entrar al panel de Profesor. Devuelve el usuario si coinciden y
+        está activo, o None si no."""
+        with self.db.get_connection() as conn:
+            row = conn.execute(
+                """SELECT u.* FROM usuarios u
+                   JOIN tipo_usuario tu ON tu.idTipoUsuario = u.tipoUsuario
+                   WHERE u.noCuenta = ? AND u.password = ? AND u.estado = 1
+                     AND tu.nombreTipoUsuario = 'Profesor'""",
+                (noCuenta, password),
+            ).fetchone()
+            return dict(row) if row else None
 
     def buscar_usuario_por_rostro(
         self, encodings: list[np.ndarray], excluir_idUsuario: int | None = None

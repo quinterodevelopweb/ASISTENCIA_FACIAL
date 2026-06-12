@@ -29,6 +29,15 @@ class ClaseService:
     def desactivar_clase(self, idClase: int) -> None:
         self.actualizar_clase(idClase, estado=0)
 
+    def activar_clase(self, idClase: int) -> None:
+        self.actualizar_clase(idClase, estado=1)
+
+    def eliminar_clase(self, idClase: int) -> None:
+        """Elimina la clase de forma permanente junto con sus inscripciones y
+        su historial de asistencia (ON DELETE CASCADE)."""
+        with self.db.get_connection() as conn:
+            conn.execute("DELETE FROM clases WHERE idClase = ?", (idClase,))
+
     def obtener_clase(self, idClase: int) -> dict | None:
         with self.db.get_connection() as conn:
             row = conn.execute("SELECT * FROM clases WHERE idClase = ?", (idClase,)).fetchone()

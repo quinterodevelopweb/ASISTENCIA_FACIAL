@@ -5,6 +5,7 @@ from datetime import datetime
 import customtkinter as ctk
 
 from gui.views.base_view import BaseView
+from gui.widgets.scrollable_table import ScrollableTable
 from services.asistencia_service import AsistenciaService
 from services.clase_service import ClaseService
 from services.usuario_service import UsuarioService
@@ -44,10 +45,10 @@ class ReportesView(BaseView):
         self.tab_historial = self.tabview.add("Historial")
         self.tab_metricas = self.tabview.add("Totales por usuario")
 
-        self.tabla_historial = ctk.CTkScrollableFrame(self.tab_historial, fg_color="transparent")
+        self.tabla_historial = ScrollableTable(self.tab_historial)
         self.tabla_historial.pack(expand=True, fill="both")
 
-        self.tabla_metricas = ctk.CTkScrollableFrame(self.tab_metricas, fg_color="transparent")
+        self.tabla_metricas = ScrollableTable(self.tab_metricas)
         self.tabla_metricas.pack(expand=True, fill="both")
 
     def on_show(self) -> None:
@@ -63,7 +64,9 @@ class ReportesView(BaseView):
             self.combo_clase.set(valores_clase[0])
 
         tipos = self.usuario_service.listar_tipos_usuario()
-        self._roles_por_nombre = {t["nombreTipoUsuario"]: t["idTipoUsuario"] for t in tipos}
+        self._roles_por_nombre = {
+            t["nombreTipoUsuario"]: t["idTipoUsuario"] for t in tipos if t["nombreTipoUsuario"] != "Administrador"
+        }
 
         valores_rol = ["Todos los roles", *self._roles_por_nombre]
         self.combo_rol.configure(values=valores_rol)
@@ -82,12 +85,11 @@ class ReportesView(BaseView):
         self._cargar_metricas(idClase, idTipoUsuario)
 
     def _cargar_historial(self, idClase: int | None, idTipoUsuario: int | None) -> None:
-        for widget in self.tabla_historial.winfo_children():
-            widget.destroy()
+        self.tabla_historial.limpiar()
 
         registros = self.asistencia_service.historial(idClase=idClase, idTipoUsuario=idTipoUsuario)
         if not registros:
-            ctk.CTkLabel(self.tabla_historial, text="No hay registros de asistencia").pack(
+            ctk.CTkLabel(self.tabla_historial.inner, text="No hay registros de asistencia").pack(
                 anchor="w", padx=10, pady=5
             )
             return
@@ -100,15 +102,14 @@ class ReportesView(BaseView):
                 f"{fecha_hora} | {registro['nombre']} {apellidos} | "
                 f"{registro['nombreClase']} ({registro['periodoClase']}) | {tipo}"
             )
-            ctk.CTkLabel(self.tabla_historial, text=texto).pack(anchor="w", padx=10, pady=2)
+            ctk.CTkLabel(self.tabla_historial.inner, text=texto).pack(anchor="w", padx=10, pady=2)
 
     def _cargar_metricas(self, idClase: int | None, idTipoUsuario: int | None) -> None:
-        for widget in self.tabla_metricas.winfo_children():
-            widget.destroy()
+        self.tabla_metricas.limpiar()
 
         metricas = self.asistencia_service.metricas_por_usuario(idClase=idClase, idTipoUsuario=idTipoUsuario)
         if not metricas:
-            ctk.CTkLabel(self.tabla_metricas, text="No hay registros de asistencia").pack(
+            ctk.CTkLabel(self.tabla_metricas.inner, text="No hay registros de asistencia").pack(
                 anchor="w", padx=10, pady=5
             )
             return
@@ -119,7 +120,7 @@ class ReportesView(BaseView):
                 f"{fila['nombre']} {apellidos} ({fila['nombreTipoUsuario']}) | "
                 f"Entradas: {fila['totalEntradas']} | Salidas: {fila['totalSalidas']} | Total: {fila['total']}"
             )
-            ctk.CTkLabel(self.tabla_metricas, text=texto).pack(anchor="w", padx=10, pady=2)
+            ctk.CTkLabel(self.tabla_metricas.inner, text=texto).pack(anchor="w", padx=10, pady=2)
 
     @staticmethod
     def _formatear_fecha_hora(fecha_hora: str) -> str:

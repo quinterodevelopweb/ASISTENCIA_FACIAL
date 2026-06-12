@@ -24,6 +24,10 @@ CREATE TABLE usuarios (
     email TEXT,
     telefono TEXT,
 
+    -- Contraseña de acceso al panel de Profesor (junto con noCuenta). Solo se
+    -- usa cuando tipoUsuario es 'Profesor'.
+    password TEXT,
+
     estado INTEGER NOT NULL DEFAULT 1,
 
     fechaHoraRegistro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

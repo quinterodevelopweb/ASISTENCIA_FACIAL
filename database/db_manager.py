@@ -34,6 +34,7 @@ class DBManager:
             else:
                 self._migrar_asistencia_tipo_registro(conn)
                 self._migrar_asistencia_nombres(conn)
+                self._migrar_usuarios_password(conn)
 
     @staticmethod
     def _migrar_asistencia_tipo_registro(conn: sqlite3.Connection) -> None:
@@ -75,6 +76,16 @@ class DBManager:
                        FROM clases c WHERE c.idClase = asistencia.idClase
                    )"""
         )
+
+    @staticmethod
+    def _migrar_usuarios_password(conn: sqlite3.Connection) -> None:
+        """Agrega a usuarios la columna password, usada para el acceso de los
+        profesores al panel de Profesor (junto con noCuenta)."""
+        columnas = {fila["name"] for fila in conn.execute("PRAGMA table_info(usuarios)")}
+        if "password" in columnas:
+            return
+
+        conn.execute("ALTER TABLE usuarios ADD COLUMN password TEXT")
 
     @staticmethod
     def encoding_to_blob(encoding: np.ndarray) -> bytes:
