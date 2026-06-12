@@ -55,6 +55,11 @@ class Camera:
             if not ok:
                 continue
             frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            # Efecto espejo: más intuitivo para colocarse frente a la cámara.
+            # Se aplica aquí (antes de detección/reconocimiento/enrolamiento)
+            # para que todo el pipeline trabaje sobre la misma imagen que ve
+            # el usuario en pantalla.
+            frame_rgb = cv2.flip(frame_rgb, 1)
             with self._lock:
                 self._frame = frame_rgb
 
