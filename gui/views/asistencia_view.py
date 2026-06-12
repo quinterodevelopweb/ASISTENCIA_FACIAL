@@ -20,7 +20,7 @@ from config.settings import (
 )
 from core.camera import Camera
 from gui.views.base_view import BaseView
-from services.asistencia_service import AsistenciaService, ResultadoAsistencia
+from services.asistencia_service import AsistenciaService, ResultadoAsistencia, TipoRegistro
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -28,6 +28,7 @@ logger = get_logger(__name__)
 ESCANEANDO = "ESCANEANDO"
 MOSTRANDO_RESULTADO = "MOSTRANDO_RESULTADO"
 SELECCIONANDO_CLASE = "SELECCIONANDO_CLASE"
+SELECCIONANDO_TIPO = "SELECCIONANDO_TIPO"
 
 
 class AsistenciaView(BaseView):
@@ -42,6 +43,7 @@ class AsistenciaView(BaseView):
         self._after_id_resultado: str | None = None
         self._estado = ESCANEANDO
         self._usuario_actual: dict | None = None
+        self._clase_actual: dict | None = None
         self._confianza_actual: float = 0.0
         self._ultimo_intento: float = 0.0
 
@@ -113,12 +115,37 @@ class AsistenciaView(BaseView):
         self.label_cuenta_usuario = ctk.CTkLabel(self.panel_identificacion, text="", text_color="gray")
         self.label_cuenta_usuario.pack(pady=2)
 
-        ctk.CTkLabel(self.panel_identificacion, text="Selecciona tu clase para registrar asistencia:").pack(
+        # Paso 1: elegir la clase para la que se va a registrar entrada/salida.
+        self.frame_paso_clase = ctk.CTkFrame(self.panel_identificacion, fg_color="transparent")
+
+        ctk.CTkLabel(self.frame_paso_clase, text="Selecciona tu clase para registrar asistencia:").pack(
             pady=(10, 5)
         )
 
-        self.frame_clases = ctk.CTkFrame(self.panel_identificacion, fg_color="transparent")
+        self.frame_clases = ctk.CTkFrame(self.frame_paso_clase, fg_color="transparent")
         self.frame_clases.pack(pady=(0, 10), padx=20, fill="x")
+
+        # Paso 2: una vez elegida la clase, registrar la entrada o la salida.
+        self.frame_paso_tipo = ctk.CTkFrame(self.panel_identificacion, fg_color="transparent")
+
+        self.label_clase_seleccionada = ctk.CTkLabel(
+            self.frame_paso_tipo, text="", font=ctk.CTkFont(size=14, weight="bold")
+        )
+        self.label_clase_seleccionada.pack(pady=(10, 2))
+
+        self.label_info_registro = ctk.CTkLabel(self.frame_paso_tipo, text="", text_color="gray")
+        self.label_info_registro.pack(pady=(0, 5))
+
+        self.frame_botones_tipo = ctk.CTkFrame(self.frame_paso_tipo, fg_color="transparent")
+        self.frame_botones_tipo.pack(pady=(0, 5), padx=20, fill="x")
+
+        ctk.CTkButton(
+            self.frame_paso_tipo,
+            text="‹ Elegir otra clase",
+            fg_color="transparent",
+            border_width=1,
+            command=self._mostrar_paso_clase,
+        ).pack(pady=(0, 10))
 
     # --- Ciclo de vida -----------------------------------------------------
 
@@ -155,7 +182,7 @@ class AsistenciaView(BaseView):
         self.label_estado.configure(text="Colócate frente a la cámara para registrar tu asistencia")
         if not self.label_estado.winfo_ismapped():
             self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
-        self._limpiar_botones_clases()
+        self._limpiar_panel_identificacion()
 
     def _actualizar_frame(self) -> None:
         frame = self.camera.read_frame_rgb()
@@ -256,13 +283,13 @@ class AsistenciaView(BaseView):
     def _mostrar_resultado_temporal(self, mensaje: str) -> None:
         self._estado = MOSTRANDO_RESULTADO
         self.panel_identificacion.place_forget()
-        self._limpiar_botones_clases()
+        self._limpiar_panel_identificacion()
         if not self.label_estado.winfo_ismapped():
             self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
         self.label_estado.configure(text=mensaje)
         self._after_id_resultado = self.after(RESULT_DISPLAY_MS, self._reset)
 
-    # --- Selección de clase -----------------------------------------------------
+    # --- Selección de clase y de entrada/salida ----------------------------------
 
     def _mostrar_seleccion_clase(self, datos: dict) -> None:
         self._estado = SELECCIONANDO_CLASE
@@ -279,24 +306,69 @@ class AsistenciaView(BaseView):
             ctk.CTkButton(
                 self.frame_clases,
                 text=f"{clase['nombreClase']} ({clase['periodoClase']})",
-                command=lambda idClase=clase["idClase"]: self._registrar(idClase),
+                command=lambda c=clase: self._seleccionar_clase(c),
             ).pack(pady=2, fill="x")
+
+        self.frame_paso_tipo.pack_forget()
+        self.frame_paso_clase.pack(fill="x")
 
         self.label_estado.place_forget()
         self.panel_identificacion.place(relx=0.5, rely=1.0, anchor="s", relwidth=0.95, y=-10)
 
-    def _registrar(self, idClase: int) -> None:
+    def _mostrar_paso_clase(self) -> None:
+        self._estado = SELECCIONANDO_CLASE
+        self.frame_paso_tipo.pack_forget()
+        self.frame_paso_clase.pack(fill="x")
+
+    def _seleccionar_clase(self, clase: dict) -> None:
+        self._estado = SELECCIONANDO_TIPO
+        self._clase_actual = clase
+
+        registrados = self.asistencia_service.registros_hoy(self._usuario_actual["idUsuario"], clase["idClase"])
+
+        self.label_clase_seleccionada.configure(text=f"{clase['nombreClase']} ({clase['periodoClase']})")
+
+        self._limpiar_botones_tipo()
+        if TipoRegistro.ENTRADA not in registrados:
+            self.label_info_registro.configure(text="")
+            ctk.CTkButton(
+                self.frame_botones_tipo,
+                text="Registrar entrada",
+                command=lambda: self._registrar(TipoRegistro.ENTRADA),
+            ).pack(pady=2, fill="x")
+        elif TipoRegistro.SALIDA not in registrados:
+            self.label_info_registro.configure(text="Ya registraste tu entrada hoy en esta clase")
+            ctk.CTkButton(
+                self.frame_botones_tipo,
+                text="Registrar salida",
+                command=lambda: self._registrar(TipoRegistro.SALIDA),
+            ).pack(pady=2, fill="x")
+        else:
+            self.label_info_registro.configure(text="Ya registraste tu entrada y tu salida de hoy en esta clase")
+
+        self.frame_paso_clase.pack_forget()
+        self.frame_paso_tipo.pack(fill="x")
+
+    def _registrar(self, tipo: str) -> None:
         resultado = self.asistencia_service.registrar_asistencia(
-            self._usuario_actual["idUsuario"], idClase, self._confianza_actual
+            self._usuario_actual["idUsuario"], self._clase_actual["idClase"], self._confianza_actual, tipo
         )
+        accion = "Entrada" if tipo == TipoRegistro.ENTRADA else "Salida"
         mensaje = (
-            "Asistencia registrada"
+            f"{accion} registrada correctamente"
             if resultado == ResultadoAsistencia.REGISTRADO
-            else "La asistencia ya fue registrada hoy"
+            else f"Tu {accion.lower()} de hoy ya estaba registrada"
         )
-        self._limpiar_botones_clases()
         self._mostrar_resultado_temporal(mensaje)
 
     def _limpiar_botones_clases(self) -> None:
         for widget in self.frame_clases.winfo_children():
             widget.destroy()
+
+    def _limpiar_botones_tipo(self) -> None:
+        for widget in self.frame_botones_tipo.winfo_children():
+            widget.destroy()
+
+    def _limpiar_panel_identificacion(self) -> None:
+        self._limpiar_botones_clases()
+        self._limpiar_botones_tipo()

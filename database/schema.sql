@@ -110,7 +110,7 @@ CREATE TABLE asistencia (
 
     confianza REAL CHECK(confianza >= 0 AND confianza <= 1),
 
-    estado TEXT NOT NULL DEFAULT 'PRESENTE',
+    tipoRegistro TEXT NOT NULL DEFAULT 'ENTRADA' CHECK(tipoRegistro IN ('ENTRADA', 'SALIDA')),
 
     FOREIGN KEY(idUsuario)
         REFERENCES usuarios(idUsuario)
@@ -158,11 +158,13 @@ ON asistencia(fechaHora);
 CREATE INDEX idx_asistencia_usuario_fecha
 ON asistencia(idUsuario, fechaHora);
 
+-- Permite un registro de ENTRADA y uno de SALIDA por usuario, clase y día.
 CREATE UNIQUE INDEX idx_asistencia_unica
 ON asistencia(
     idUsuario,
     idClase,
-    DATE(fechaHora)
+    DATE(fechaHora),
+    tipoRegistro
 );
 
 -- Triggers: mantener fechaHoraActualizacion al día

@@ -54,9 +54,10 @@ class ReportesView(BaseView):
         for registro in registros:
             apellidos = " ".join(filter(None, [registro["apPaterno"], registro["apMaterno"]]))
             fecha_hora = self._formatear_fecha_hora(registro["fechaHora"])
+            tipo = "Entrada" if registro["tipoRegistro"] == "ENTRADA" else "Salida"
             texto = (
                 f"{fecha_hora} | {registro['nombre']} {apellidos} | "
-                f"{registro['nombreClase']} ({registro['periodoClase']}) | {registro['estado']}"
+                f"{registro['nombreClase']} ({registro['periodoClase']}) | {tipo}"
             )
             ctk.CTkLabel(self.tabla, text=texto).pack(anchor="w", padx=10, pady=2)
 

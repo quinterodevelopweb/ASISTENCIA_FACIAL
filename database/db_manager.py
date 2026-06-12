@@ -31,6 +31,26 @@ class DBManager:
             if existe is None:
                 with open(self.schema_path, "r", encoding="utf-8") as f:
                     conn.executescript(f.read())
+            else:
+                self._migrar_asistencia_tipo_registro(conn)
+
+    @staticmethod
+    def _migrar_asistencia_tipo_registro(conn: sqlite3.Connection) -> None:
+        """Migra bases de datos creadas antes del flujo de entrada/salida: renombra
+        la columna 'estado' (siempre 'PRESENTE') de asistencia a 'tipoRegistro'
+        ('ENTRADA'/'SALIDA') y ajusta el índice único para permitir un registro de
+        cada tipo por usuario, clase y día."""
+        columnas = {fila["name"] for fila in conn.execute("PRAGMA table_info(asistencia)")}
+        if "tipoRegistro" in columnas:
+            return
+
+        conn.execute("ALTER TABLE asistencia RENAME COLUMN estado TO tipoRegistro")
+        conn.execute("UPDATE asistencia SET tipoRegistro = 'ENTRADA' WHERE tipoRegistro = 'PRESENTE'")
+        conn.execute("DROP INDEX IF EXISTS idx_asistencia_unica")
+        conn.execute(
+            "CREATE UNIQUE INDEX idx_asistencia_unica "
+            "ON asistencia(idUsuario, idClase, DATE(fechaHora), tipoRegistro)"
+        )
 
     @staticmethod
     def encoding_to_blob(encoding: np.ndarray) -> bytes:

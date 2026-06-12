@@ -16,9 +16,14 @@ class ResultadoAsistencia:
     NO_IDENTIFICADO = "NO_IDENTIFICADO"  # rostro detectado pero no coincide con ningún usuario
     SIN_CLASES = "SIN_CLASES"  # usuario reconocido pero no inscrito en ninguna clase
     IDENTIFICADO = "IDENTIFICADO"  # usuario reconocido, debe elegir su clase
-    YA_REGISTRADO = "YA_REGISTRADO"  # ya existe un registro de hoy para usuario+clase
+    YA_REGISTRADO = "YA_REGISTRADO"  # ya existe un registro de ese tipo hoy para usuario+clase
     REGISTRADO = "REGISTRADO"  # asistencia registrada con éxito
     ERROR = "ERROR"  # ocurrió un error inesperado al procesar el frame
+
+
+class TipoRegistro:
+    ENTRADA = "ENTRADA"
+    SALIDA = "SALIDA"
 
 
 class AsistenciaService:
@@ -66,29 +71,40 @@ class AsistenciaService:
             "location": location,
         }
 
-    def registrar_asistencia(self, idUsuario: int, idClase: int, confianza: float, estado: str = "PRESENTE") -> str:
-        """Registra la asistencia de un usuario ya identificado en la clase elegida.
+    def registrar_asistencia(self, idUsuario: int, idClase: int, confianza: float, tipo: str) -> str:
+        """Registra una entrada o salida (tipo: TipoRegistro.ENTRADA/SALIDA) de un
+        usuario ya identificado en la clase elegida.
 
-        Devuelve REGISTRADO o YA_REGISTRADO (si ya existía un registro de hoy para
-        ese usuario y clase, restricción idx_asistencia_unica).
+        Devuelve REGISTRADO o YA_REGISTRADO (si ya existía un registro de ese tipo
+        hoy para ese usuario y clase, restricción idx_asistencia_unica).
         """
         try:
             with self.db.get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO asistencia (idUsuario, idClase, fechaHora, confianza, estado) "
+                    "INSERT INTO asistencia (idUsuario, idClase, fechaHora, confianza, tipoRegistro) "
                     "VALUES (?, ?, datetime('now', 'localtime'), ?, ?)",
-                    (idUsuario, idClase, confianza, estado),
+                    (idUsuario, idClase, confianza, tipo),
                 )
             return ResultadoAsistencia.REGISTRADO
         except sqlite3.IntegrityError:
             return ResultadoAsistencia.YA_REGISTRADO
+
+    def registros_hoy(self, idUsuario: int, idClase: int) -> set[str]:
+        """Tipos de registro (ENTRADA/SALIDA) que el usuario ya hizo hoy en esta clase."""
+        with self.db.get_connection() as conn:
+            rows = conn.execute(
+                "SELECT tipoRegistro FROM asistencia "
+                "WHERE idUsuario = ? AND idClase = ? AND DATE(fechaHora) = DATE('now', 'localtime')",
+                (idUsuario, idClase),
+            ).fetchall()
+        return {row["tipoRegistro"] for row in rows}
 
     def historial(self, idUsuario: int | None = None, idClase: int | None = None) -> list[dict]:
         query = """
             SELECT
                 a.idAsistencia,
                 a.fechaHora,
-                a.estado,
+                a.tipoRegistro,
                 a.idUsuario,
                 a.idClase,
                 u.nombre,
