@@ -7,6 +7,7 @@ import customtkinter as ctk
 from gui.views.base_view import BaseView
 from gui.views.catalogo_usuarios_view import CatalogoUsuariosView
 from gui.views.clases_view import ClasesView
+from gui.views.editar_usuario_view import EditarUsuarioView
 from gui.views.reportes_view import ReportesView
 from gui.views.usuarios_view import UsuariosView
 
@@ -54,7 +55,8 @@ class AdminPanel(BaseView):
 
     def _crear_vistas(self) -> None:
         self.vistas: dict[str, BaseView] = {
-            "usuarios": CatalogoUsuariosView(self),
+            "usuarios": CatalogoUsuariosView(self, on_seleccionar=self._abrir_editar_usuario),
+            "editar_usuario": EditarUsuarioView(self, on_volver=lambda: self._mostrar_vista("usuarios")),
             "registro": UsuariosView(self),
             "clases": ClasesView(self),
             "reportes": ReportesView(self),
@@ -74,6 +76,10 @@ class AdminPanel(BaseView):
         vista.tkraise()
         if self._activo:
             vista.on_show()
+
+    def _abrir_editar_usuario(self, idUsuario: int) -> None:
+        self._mostrar_vista("editar_usuario")
+        self.vistas["editar_usuario"].cargar_usuario(idUsuario)
 
     # --- Ciclo de vida (llamado por App al cambiar de pantalla) ----------------
 
