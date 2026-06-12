@@ -85,10 +85,14 @@ class AsistenciaView(BaseView):
         self.video_label = ctk.CTkLabel(self.frame_video, text="")
         self.video_label.place(relx=0.5, rely=0.5, anchor="center")
 
+        self._font_estado_normal = ctk.CTkFont(size=14)
+        self._font_estado_error = ctk.CTkFont(size=16, weight="bold")
+        self._color_estado_normal = ctk.ThemeManager.theme["CTkLabel"]["text_color"]
+
         self.label_estado = ctk.CTkLabel(
             self.frame_video,
             text="Colócate frente a la cámara para registrar tu asistencia",
-            font=ctk.CTkFont(size=14),
+            font=self._font_estado_normal,
             fg_color=("gray85", "gray17"),
             corner_radius=8,
             padx=10,
@@ -189,7 +193,11 @@ class AsistenciaView(BaseView):
         with self._reconocimiento_lock:
             self._resultado_pendiente = None
         self.panel_identificacion.place_forget()
-        self.label_estado.configure(text="Colócate frente a la cámara para registrar tu asistencia")
+        self.label_estado.configure(
+            text="Colócate frente a la cámara para registrar tu asistencia",
+            text_color=self._color_estado_normal,
+            font=self._font_estado_normal,
+        )
         if not self.label_estado.winfo_ismapped():
             self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
         self._limpiar_panel_identificacion()
@@ -273,13 +281,12 @@ class AsistenciaView(BaseView):
         elif resultado == ResultadoAsistencia.ERROR:
             self.label_estado.configure(text="Error al procesar el rostro, intenta de nuevo")
         elif resultado == ResultadoAsistencia.NO_IDENTIFICADO:
-            self._mostrar_resultado_temporal(
-                f"Rostro detectado, pero no coincide con ningún usuario registrado "
-                f"(confianza {datos['confianza']:.2f})"
-            )
+            self._mostrar_resultado_temporal("Usuario no reconocido")
         elif resultado == ResultadoAsistencia.SIN_CLASES:
             usuario = datos["usuario"]
-            self._mostrar_resultado_temporal(f"{usuario['nombre']}: no tienes clases asignadas")
+            self._mostrar_resultado_temporal(
+                f"{usuario['nombre']}: no tienes clases asignadas", es_error=True
+            )
         elif resultado == ResultadoAsistencia.IDENTIFICADO:
             self._mostrar_seleccion_clase(datos)
 
@@ -290,13 +297,16 @@ class AsistenciaView(BaseView):
 
     # --- Resultados temporales -----------------------------------------------
 
-    def _mostrar_resultado_temporal(self, mensaje: str) -> None:
+    def _mostrar_resultado_temporal(self, mensaje: str, es_error: bool = False) -> None:
         self._estado = MOSTRANDO_RESULTADO
         self.panel_identificacion.place_forget()
         self._limpiar_panel_identificacion()
         if not self.label_estado.winfo_ismapped():
             self.label_estado.place(relx=0.5, rely=1.0, anchor="s", y=-10)
-        self.label_estado.configure(text=mensaje)
+        if es_error:
+            self.label_estado.configure(text=mensaje, text_color="red", font=self._font_estado_error)
+        else:
+            self.label_estado.configure(text=mensaje, text_color=self._color_estado_normal, font=self._font_estado_normal)
         self._after_id_resultado = self.after(RESULT_DISPLAY_MS, self._reset)
 
     # --- Selección de clase y de entrada/salida ----------------------------------

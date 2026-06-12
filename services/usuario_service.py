@@ -4,6 +4,7 @@ import numpy as np
 
 from config.settings import ENCODING_DIMENSION, ENCODING_MODEL_NAME
 from core.face_encoder import get_model_version
+from core.face_matcher import find_best_match
 from database.db_manager import DBManager
 
 CAMPOS_ACTUALIZABLES_USUARIO = {
@@ -121,3 +122,21 @@ class UsuarioService:
         vectores = [self.db.blob_to_encoding(row["vector"]) for row in rows]
         ids = [row["idUsuario"] for row in rows]
         return vectores, ids
+
+    def buscar_usuario_por_rostro(
+        self, encodings: list[np.ndarray], excluir_idUsuario: int | None = None
+    ) -> dict | None:
+        """Busca si alguno de los encodings dados coincide con el rostro de OTRO
+        usuario ya registrado (p. ej. al recapturar el rostro durante una
+        edición). Devuelve ese usuario, o None si no hay coincidencia."""
+        known_encodings, known_ids = self.obtener_encodings_activos()
+        if excluir_idUsuario is not None:
+            pares = [(e, uid) for e, uid in zip(known_encodings, known_ids) if uid != excluir_idUsuario]
+            known_encodings = [e for e, _ in pares]
+            known_ids = [uid for _, uid in pares]
+
+        for encoding in encodings:
+            idUsuario, _ = find_best_match(known_encodings, known_ids, encoding)
+            if idUsuario is not None:
+                return self.obtener_usuario(idUsuario)
+        return None

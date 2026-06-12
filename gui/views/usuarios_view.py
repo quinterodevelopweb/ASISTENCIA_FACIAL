@@ -156,6 +156,14 @@ class UsuariosView(BaseView):
             self.label_mensaje.configure(text="Completa la captura de rostro antes de guardar", text_color="red")
             return
 
+        usuario_duplicado = self.usuario_service.buscar_usuario_por_rostro(self.face_widget.obtener_encodings())
+        if usuario_duplicado is not None:
+            nombre_dup = f"{usuario_duplicado['nombre']} {usuario_duplicado['apPaterno']}"
+            self.label_mensaje.configure(
+                text=f"Este rostro ya está registrado para {nombre_dup}", text_color="red"
+            )
+            return
+
         idTipoUsuario = self._tipos_por_nombre.get(self.combo_tipo.get())
         if idTipoUsuario is None:
             self.label_mensaje.configure(text="Selecciona un tipo de usuario válido", text_color="red")

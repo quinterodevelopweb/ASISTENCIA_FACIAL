@@ -240,6 +240,17 @@ class CatalogoUsuariosView(BaseView):
             self.label_mensaje.configure(text="Selecciona un tipo de usuario válido", text_color="red")
             return
 
+        if self.face_widget.esta_completo():
+            usuario_duplicado = self.usuario_service.buscar_usuario_por_rostro(
+                self.face_widget.obtener_encodings(), excluir_idUsuario=self._idUsuario_actual
+            )
+            if usuario_duplicado is not None:
+                nombre_dup = f"{usuario_duplicado['nombre']} {usuario_duplicado['apPaterno']}"
+                self.label_mensaje.configure(
+                    text=f"Este rostro ya está registrado para {nombre_dup}", text_color="red"
+                )
+                return
+
         try:
             self.usuario_service.actualizar_usuario(
                 self._idUsuario_actual,
