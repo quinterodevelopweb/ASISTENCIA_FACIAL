@@ -33,6 +33,7 @@ class DBManager:
                     conn.executescript(f.read())
             else:
                 self._migrar_asistencia_tipo_registro(conn)
+                self._migrar_asistencia_nombres(conn)
 
     @staticmethod
     def _migrar_asistencia_tipo_registro(conn: sqlite3.Connection) -> None:
@@ -50,6 +51,29 @@ class DBManager:
         conn.execute(
             "CREATE UNIQUE INDEX idx_asistencia_unica "
             "ON asistencia(idUsuario, idClase, DATE(fechaHora), tipoRegistro)"
+        )
+
+    @staticmethod
+    def _migrar_asistencia_nombres(conn: sqlite3.Connection) -> None:
+        """Agrega a asistencia las columnas nombreUsuario/nombreClase (copia del
+        nombre del usuario y de la clase al momento del registro) y las rellena
+        para los registros existentes."""
+        columnas = {fila["name"] for fila in conn.execute("PRAGMA table_info(asistencia)")}
+        if "nombreUsuario" in columnas:
+            return
+
+        conn.execute("ALTER TABLE asistencia ADD COLUMN nombreUsuario TEXT NOT NULL DEFAULT ''")
+        conn.execute("ALTER TABLE asistencia ADD COLUMN nombreClase TEXT NOT NULL DEFAULT ''")
+        conn.execute(
+            """UPDATE asistencia
+               SET nombreUsuario = (
+                       SELECT u.nombre || ' ' || u.apPaterno || COALESCE(' ' || u.apMaterno, '')
+                       FROM usuarios u WHERE u.idUsuario = asistencia.idUsuario
+                   ),
+                   nombreClase = (
+                       SELECT c.nombreClase || ' (' || c.periodoClase || ')'
+                       FROM clases c WHERE c.idClase = asistencia.idClase
+                   )"""
         )
 
     @staticmethod

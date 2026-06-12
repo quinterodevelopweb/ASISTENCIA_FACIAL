@@ -32,7 +32,7 @@ SELECCIONANDO_TIPO = "SELECCIONANDO_TIPO"
 
 
 class AsistenciaView(BaseView):
-    def __init__(self, master, on_admin_click: Callable[[], None], **kwargs):
+    def __init__(self, master, on_admin_click: Callable[[], None], on_profesor_click: Callable[[], None], **kwargs):
         super().__init__(master, **kwargs)
 
         self.camera = Camera()
@@ -60,9 +60,9 @@ class AsistenciaView(BaseView):
         self._reconociendo = False
         self._resultado_pendiente: tuple[str, dict | None] | None = None
 
-        self._construir_ui(on_admin_click)
+        self._construir_ui(on_admin_click, on_profesor_click)
 
-    def _construir_ui(self, on_admin_click: Callable[[], None]) -> None:
+    def _construir_ui(self, on_admin_click: Callable[[], None], on_profesor_click: Callable[[], None]) -> None:
         barra_superior = ctk.CTkFrame(self, fg_color="transparent")
         barra_superior.pack(fill="x")
 
@@ -70,6 +70,10 @@ class AsistenciaView(BaseView):
         self.label_auth.pack(side="left", padx=10, pady=5)
 
         ctk.CTkButton(barra_superior, text="Administrador", width=120, command=on_admin_click).pack(
+            side="right", padx=10, pady=5
+        )
+
+        ctk.CTkButton(barra_superior, text="Profesor", width=120, command=on_profesor_click).pack(
             side="right", padx=10, pady=5
         )
 

@@ -106,6 +106,11 @@ CREATE TABLE asistencia (
     idUsuario INTEGER NOT NULL,
     idClase INTEGER NOT NULL,
 
+    -- Copia del nombre del usuario y de la clase al momento del registro, para
+    -- que el registro sea legible directamente en la base de datos (sin JOIN).
+    nombreUsuario TEXT NOT NULL DEFAULT '',
+    nombreClase TEXT NOT NULL DEFAULT '',
+
     fechaHora DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     confianza REAL CHECK(confianza >= 0 AND confianza <= 1),

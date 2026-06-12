@@ -6,6 +6,7 @@ import customtkinter as ctk
 from config.settings import ADMIN_PASSWORD, APP_COLOR_THEME, APP_THEME, APP_TITLE
 from gui.views.admin_panel import AdminPanel
 from gui.views.asistencia_view import AsistenciaView
+from gui.views.profesor_view import ProfesorView
 from gui.widgets.password_dialog import PasswordDialog
 
 
@@ -31,8 +32,11 @@ class App(ctk.CTk):
 
     def _crear_pantallas(self) -> None:
         self.pantallas = {
-            "usuario": AsistenciaView(self, on_admin_click=self._solicitar_acceso_admin),
+            "usuario": AsistenciaView(
+                self, on_admin_click=self._solicitar_acceso_admin, on_profesor_click=lambda: self.mostrar_pantalla("profesor")
+            ),
             "admin": AdminPanel(self, on_salir=lambda: self.mostrar_pantalla("usuario")),
+            "profesor": ProfesorView(self, on_salir=lambda: self.mostrar_pantalla("usuario")),
         }
         for pantalla in self.pantallas.values():
             pantalla.grid(row=0, column=0, sticky="nsew")

@@ -7,6 +7,7 @@ import numpy as np
 from core.face_encoder import get_single_face_encoding
 from core.face_matcher import distance_to_confidence, find_best_match
 from database.db_manager import DBManager
+from services.clase_service import ClaseService
 from services.inscripcion_service import InscripcionService
 from services.usuario_service import UsuarioService
 
@@ -32,10 +33,12 @@ class AsistenciaService:
         db_manager: DBManager | None = None,
         usuario_service: UsuarioService | None = None,
         inscripcion_service: InscripcionService | None = None,
+        clase_service: ClaseService | None = None,
     ):
         self.db = db_manager or DBManager()
         self.usuarios = usuario_service or UsuarioService(self.db)
         self.inscripciones = inscripcion_service or InscripcionService(self.db)
+        self.clases = clase_service or ClaseService(self.db)
 
     def identificar(self, frame_rgb: np.ndarray) -> tuple[str, dict | None]:
         """Busca un rostro en el frame y lo identifica contra los encodings registrados.
@@ -78,12 +81,18 @@ class AsistenciaService:
         Devuelve REGISTRADO o YA_REGISTRADO (si ya existía un registro de ese tipo
         hoy para ese usuario y clase, restricción idx_asistencia_unica).
         """
+        usuario = self.usuarios.obtener_usuario(idUsuario)
+        clase = self.clases.obtener_clase(idClase)
+        nombreUsuario = " ".join(filter(None, [usuario["nombre"], usuario["apPaterno"], usuario["apMaterno"]]))
+        nombreClase = f"{clase['nombreClase']} ({clase['periodoClase']})"
+
         try:
             with self.db.get_connection() as conn:
                 conn.execute(
-                    "INSERT INTO asistencia (idUsuario, idClase, fechaHora, confianza, tipoRegistro) "
-                    "VALUES (?, ?, datetime('now', 'localtime'), ?, ?)",
-                    (idUsuario, idClase, confianza, tipo),
+                    "INSERT INTO asistencia "
+                    "(idUsuario, idClase, fechaHora, confianza, tipoRegistro, nombreUsuario, nombreClase) "
+                    "VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?)",
+                    (idUsuario, idClase, confianza, tipo, nombreUsuario, nombreClase),
                 )
             return ResultadoAsistencia.REGISTRADO
         except sqlite3.IntegrityError:
@@ -99,7 +108,9 @@ class AsistenciaService:
             ).fetchall()
         return {row["tipoRegistro"] for row in rows}
 
-    def historial(self, idUsuario: int | None = None, idClase: int | None = None) -> list[dict]:
+    def historial(
+        self, idUsuario: int | None = None, idClase: int | None = None, idTipoUsuario: int | None = None
+    ) -> list[dict]:
         query = """
             SELECT
                 a.idAsistencia,
@@ -125,10 +136,48 @@ class AsistenciaService:
         if idClase is not None:
             condiciones.append("a.idClase = ?")
             params.append(idClase)
+        if idTipoUsuario is not None:
+            condiciones.append("u.tipoUsuario = ?")
+            params.append(idTipoUsuario)
 
         if condiciones:
             query += " WHERE " + " AND ".join(condiciones)
         query += " ORDER BY a.fechaHora DESC"
+
+        with self.db.get_connection() as conn:
+            rows = conn.execute(query, params).fetchall()
+            return [dict(row) for row in rows]
+
+    def metricas_por_usuario(self, idClase: int | None = None, idTipoUsuario: int | None = None) -> list[dict]:
+        """Totales de asistencia (entradas/salidas) agrupados por usuario, para
+        mostrar métricas en los reportes."""
+        query = """
+            SELECT
+                u.idUsuario,
+                u.nombre,
+                u.apPaterno,
+                u.apMaterno,
+                tu.nombreTipoUsuario,
+                COUNT(*) AS total,
+                SUM(CASE WHEN a.tipoRegistro = 'ENTRADA' THEN 1 ELSE 0 END) AS totalEntradas,
+                SUM(CASE WHEN a.tipoRegistro = 'SALIDA' THEN 1 ELSE 0 END) AS totalSalidas
+            FROM asistencia a
+            JOIN usuarios u ON u.idUsuario = a.idUsuario
+            JOIN tipo_usuario tu ON tu.idTipoUsuario = u.tipoUsuario
+        """
+        condiciones = []
+        params: list = []
+
+        if idClase is not None:
+            condiciones.append("a.idClase = ?")
+            params.append(idClase)
+        if idTipoUsuario is not None:
+            condiciones.append("u.tipoUsuario = ?")
+            params.append(idTipoUsuario)
+
+        if condiciones:
+            query += " WHERE " + " AND ".join(condiciones)
+        query += " GROUP BY u.idUsuario ORDER BY tu.nombreTipoUsuario, u.apPaterno, u.apMaterno, u.nombre"
 
         with self.db.get_connection() as conn:
             rows = conn.execute(query, params).fetchall()
