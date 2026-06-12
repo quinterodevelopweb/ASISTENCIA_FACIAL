@@ -46,6 +46,7 @@ class AsistenciaView(BaseView):
         self._clase_actual: dict | None = None
         self._confianza_actual: float = 0.0
         self._ultimo_intento: float = 0.0
+        self._idTipoProfesor: int | None = None
 
         # Recuadro que se dibuja sobre el rostro detectado (coordenadas del
         # frame mostrado) y su color, junto con la escala usada para
@@ -168,6 +169,9 @@ class AsistenciaView(BaseView):
     # --- Ciclo de vida -----------------------------------------------------
 
     def on_show(self) -> None:
+        tipos = self.asistencia_service.usuarios.listar_tipos_usuario()
+        self._idTipoProfesor = next((t["idTipoUsuario"] for t in tipos if t["nombreTipoUsuario"] == "Profesor"), None)
+
         self._reset()
         self.camera.start()
         self._actualizar_frame()
@@ -348,27 +352,50 @@ class AsistenciaView(BaseView):
         self._estado = SELECCIONANDO_TIPO
         self._clase_actual = clase
 
-        registrados = self.asistencia_service.registros_hoy(self._usuario_actual["idUsuario"], clase["idClase"])
-
         self.label_clase_seleccionada.configure(text=f"{clase['nombreClase']} ({clase['periodoClase']})")
 
         self._limpiar_botones_tipo()
-        if TipoRegistro.ENTRADA not in registrados:
-            self.label_info_registro.configure(text="")
-            ctk.CTkButton(
-                self.frame_botones_tipo,
-                text="Registrar entrada",
-                command=lambda: self._registrar(TipoRegistro.ENTRADA),
-            ).pack(pady=2, fill="x")
-        elif TipoRegistro.SALIDA not in registrados:
-            self.label_info_registro.configure(text="Ya registraste tu entrada hoy en esta clase")
-            ctk.CTkButton(
-                self.frame_botones_tipo,
-                text="Registrar salida",
-                command=lambda: self._registrar(TipoRegistro.SALIDA),
-            ).pack(pady=2, fill="x")
+
+        if self._usuario_actual["tipoUsuario"] == self._idTipoProfesor:
+            # Los profesores pueden dar la misma clase varias veces al día, sin
+            # límite de registros: cada vez que se escanean se les alterna entre
+            # registrar entrada y registrar salida según su último registro.
+            ultimo = self.asistencia_service.ultimo_tipo_registro_hoy(
+                self._usuario_actual["idUsuario"], clase["idClase"]
+            )
+            if ultimo == TipoRegistro.ENTRADA:
+                self.label_info_registro.configure(text="Ya registraste tu entrada, ahora puedes registrar tu salida")
+                ctk.CTkButton(
+                    self.frame_botones_tipo,
+                    text="Registrar salida",
+                    command=lambda: self._registrar(TipoRegistro.SALIDA),
+                ).pack(pady=2, fill="x")
+            else:
+                self.label_info_registro.configure(text="")
+                ctk.CTkButton(
+                    self.frame_botones_tipo,
+                    text="Registrar entrada",
+                    command=lambda: self._registrar(TipoRegistro.ENTRADA),
+                ).pack(pady=2, fill="x")
         else:
-            self.label_info_registro.configure(text="Ya registraste tu entrada y tu salida de hoy en esta clase")
+            registrados = self.asistencia_service.registros_hoy(self._usuario_actual["idUsuario"], clase["idClase"])
+
+            if TipoRegistro.ENTRADA not in registrados:
+                self.label_info_registro.configure(text="")
+                ctk.CTkButton(
+                    self.frame_botones_tipo,
+                    text="Registrar entrada",
+                    command=lambda: self._registrar(TipoRegistro.ENTRADA),
+                ).pack(pady=2, fill="x")
+            elif TipoRegistro.SALIDA not in registrados:
+                self.label_info_registro.configure(text="Ya registraste tu entrada hoy en esta clase")
+                ctk.CTkButton(
+                    self.frame_botones_tipo,
+                    text="Registrar salida",
+                    command=lambda: self._registrar(TipoRegistro.SALIDA),
+                ).pack(pady=2, fill="x")
+            else:
+                self.label_info_registro.configure(text="Ya registraste tu entrada y tu salida de hoy en esta clase")
 
         self.frame_paso_clase.pack_forget()
         self.frame_paso_tipo.pack(fill="x")

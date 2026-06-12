@@ -12,6 +12,7 @@ from config.settings import CAMERA_HEIGHT, CAMERA_WIDTH, RECOGNITION_WIDTH, SCAN
 from core.camera import Camera
 from gui.views.base_view import BaseView
 from gui.widgets.face_enrollment_widget import FaceEnrollmentWidget
+from gui.widgets.scrollable_table import ScrollableTable
 from services.clase_service import ClaseService
 from services.inscripcion_service import InscripcionService
 from services.usuario_service import UsuarioService
@@ -42,7 +43,7 @@ class CatalogoUsuariosView(BaseView):
         self._construir_ui()
 
     def _construir_ui(self) -> None:
-        self.frame_lista = ctk.CTkScrollableFrame(self, label_text="Usuarios", width=220)
+        self.frame_lista = ScrollableTable(self, label_text="Usuarios", width=220)
         self.frame_lista.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
 
         self.frame_edicion = ctk.CTkScrollableFrame(self, label_text="Editar usuario")
@@ -131,12 +132,11 @@ class CatalogoUsuariosView(BaseView):
         self.combo_tipo.configure(values=list(self._tipos_por_nombre) or ["Sin tipos registrados"])
 
     def _cargar_lista_usuarios(self) -> None:
-        for widget in self.frame_lista.winfo_children():
-            widget.destroy()
+        self.frame_lista.limpiar()
 
         usuarios = self.usuario_service.listar_usuarios(solo_activos=False)
         if not usuarios:
-            ctk.CTkLabel(self.frame_lista, text="No hay usuarios registrados").pack(anchor="w", padx=10, pady=5)
+            ctk.CTkLabel(self.frame_lista.inner, text="No hay usuarios registrados").pack(anchor="w", padx=10, pady=5)
             return
 
         for usuario in usuarios:
@@ -145,13 +145,14 @@ class CatalogoUsuariosView(BaseView):
             if not usuario["estado"]:
                 texto += " (inactivo)"
             ctk.CTkButton(
-                self.frame_lista,
+                self.frame_lista.inner,
                 text=texto,
+                width=600,
                 anchor="w",
                 fg_color="transparent",
                 text_color="gray60" if not usuario["estado"] else None,
                 command=lambda idUsuario=usuario["idUsuario"]: self._seleccionar_usuario(idUsuario),
-            ).pack(fill="x", padx=5, pady=2)
+            ).pack(padx=5, pady=2)
 
     # --- Selección y edición de usuario ----------------------------------------
 

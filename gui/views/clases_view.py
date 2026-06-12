@@ -6,6 +6,7 @@ import tkinter.messagebox as messagebox
 import customtkinter as ctk
 
 from gui.views.base_view import BaseView
+from gui.widgets.scrollable_table import ScrollableTable
 from services.clase_service import ClaseService
 
 
@@ -24,14 +25,14 @@ class ClasesView(BaseView):
         self._construir_ui()
 
     def _construir_ui(self) -> None:
-        self.frame_lista = ctk.CTkScrollableFrame(self, label_text="Clases", width=220)
+        self.frame_lista = ScrollableTable(self, label_text="Clases", width=220)
         self.frame_lista.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
 
         self.frame_edicion = ctk.CTkScrollableFrame(self, label_text="Nueva clase")
         self.frame_edicion.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
 
-        ctk.CTkButton(self.frame_lista, text="+ Nueva clase", command=self._preparar_nueva_clase).pack(
-            fill="x", padx=5, pady=(0, 10)
+        ctk.CTkButton(self.frame_lista.inner, text="+ Nueva clase", command=self._preparar_nueva_clase).pack(
+            fill="x", padx=5, pady=(5, 10)
         )
 
         self.entry_nombre = ctk.CTkEntry(self.frame_edicion, placeholder_text="Nombre de la clase")
@@ -65,12 +66,12 @@ class ClasesView(BaseView):
     def _cargar_lista_clases(self) -> None:
         # El primer hijo es el botón "+ Nueva clase" (se conserva); el resto
         # son los botones de clases de la carga anterior.
-        for widget in self.frame_lista.winfo_children()[1:]:
+        for widget in self.frame_lista.inner.winfo_children()[1:]:
             widget.destroy()
 
         clases = self.clase_service.listar_clases(solo_activas=False)
         if not clases:
-            ctk.CTkLabel(self.frame_lista, text="No hay clases registradas").pack(anchor="w", padx=10, pady=5)
+            ctk.CTkLabel(self.frame_lista.inner, text="No hay clases registradas").pack(anchor="w", padx=10, pady=5)
             return
 
         for clase in clases:
@@ -78,13 +79,14 @@ class ClasesView(BaseView):
             if not clase["estado"]:
                 texto += " (inactiva)"
             ctk.CTkButton(
-                self.frame_lista,
+                self.frame_lista.inner,
                 text=texto,
+                width=600,
                 anchor="w",
                 fg_color="transparent",
                 text_color="gray60" if not clase["estado"] else None,
                 command=lambda idClase=clase["idClase"]: self._seleccionar_clase(idClase),
-            ).pack(fill="x", padx=5, pady=2)
+            ).pack(padx=5, pady=2)
 
     # --- Selección y edición -----------------------------------------------------
 

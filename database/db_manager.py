@@ -35,24 +35,19 @@ class DBManager:
                 self._migrar_asistencia_tipo_registro(conn)
                 self._migrar_asistencia_nombres(conn)
                 self._migrar_usuarios_password(conn)
+                self._migrar_quitar_limite_asistencia_diario(conn)
 
     @staticmethod
     def _migrar_asistencia_tipo_registro(conn: sqlite3.Connection) -> None:
         """Migra bases de datos creadas antes del flujo de entrada/salida: renombra
         la columna 'estado' (siempre 'PRESENTE') de asistencia a 'tipoRegistro'
-        ('ENTRADA'/'SALIDA') y ajusta el índice único para permitir un registro de
-        cada tipo por usuario, clase y día."""
+        ('ENTRADA'/'SALIDA')."""
         columnas = {fila["name"] for fila in conn.execute("PRAGMA table_info(asistencia)")}
         if "tipoRegistro" in columnas:
             return
 
         conn.execute("ALTER TABLE asistencia RENAME COLUMN estado TO tipoRegistro")
         conn.execute("UPDATE asistencia SET tipoRegistro = 'ENTRADA' WHERE tipoRegistro = 'PRESENTE'")
-        conn.execute("DROP INDEX IF EXISTS idx_asistencia_unica")
-        conn.execute(
-            "CREATE UNIQUE INDEX idx_asistencia_unica "
-            "ON asistencia(idUsuario, idClase, DATE(fechaHora), tipoRegistro)"
-        )
 
     @staticmethod
     def _migrar_asistencia_nombres(conn: sqlite3.Connection) -> None:
@@ -86,6 +81,18 @@ class DBManager:
             return
 
         conn.execute("ALTER TABLE usuarios ADD COLUMN password TEXT")
+
+    @staticmethod
+    def _migrar_quitar_limite_asistencia_diario(conn: sqlite3.Connection) -> None:
+        """Elimina el índice único que limitaba a un registro de ENTRADA y uno de
+        SALIDA por usuario, clase y día. Esa validación ahora la hace la
+        aplicación y solo aplica a Alumnos: los Profesores pueden registrar
+        entradas/salidas varias veces al día."""
+        indices = {fila["name"] for fila in conn.execute("PRAGMA index_list(asistencia)")}
+        if "idx_asistencia_unica" not in indices:
+            return
+
+        conn.execute("DROP INDEX idx_asistencia_unica")
 
     @staticmethod
     def encoding_to_blob(encoding: np.ndarray) -> bytes:

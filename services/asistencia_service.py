@@ -1,7 +1,5 @@
 """Lóoogica de reconocimiento facial y registro de asistencia."""
 
-import sqlite3
-
 import numpy as np
 
 from core.face_encoder import get_single_face_encoding
@@ -78,25 +76,42 @@ class AsistenciaService:
         """Registra una entrada o salida (tipo: TipoRegistro.ENTRADA/SALIDA) de un
         usuario ya identificado en la clase elegida.
 
-        Devuelve REGISTRADO o YA_REGISTRADO (si ya existía un registro de ese tipo
-        hoy para ese usuario y clase, restricción idx_asistencia_unica).
+        Los Alumnos solo pueden tener un registro de ENTRADA y uno de SALIDA por
+        clase y día: si ya existe uno de ese tipo, devuelve YA_REGISTRADO sin
+        insertar nada. Los Profesores no tienen ese límite, ya que pueden dar la
+        misma clase varias veces al día y deben poder registrar entradas y
+        salidas cada vez.
         """
         usuario = self.usuarios.obtener_usuario(idUsuario)
         clase = self.clases.obtener_clase(idClase)
         nombreUsuario = " ".join(filter(None, [usuario["nombre"], usuario["apPaterno"], usuario["apMaterno"]]))
         nombreClase = f"{clase['nombreClase']} ({clase['periodoClase']})"
 
-        try:
-            with self.db.get_connection() as conn:
+        with self.db.get_connection() as conn:
+            es_profesor = (
                 conn.execute(
-                    "INSERT INTO asistencia "
-                    "(idUsuario, idClase, fechaHora, confianza, tipoRegistro, nombreUsuario, nombreClase) "
-                    "VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?)",
-                    (idUsuario, idClase, confianza, tipo, nombreUsuario, nombreClase),
-                )
-            return ResultadoAsistencia.REGISTRADO
-        except sqlite3.IntegrityError:
-            return ResultadoAsistencia.YA_REGISTRADO
+                    "SELECT 1 FROM tipo_usuario WHERE idTipoUsuario = ? AND nombreTipoUsuario = 'Profesor'",
+                    (usuario["tipoUsuario"],),
+                ).fetchone()
+                is not None
+            )
+
+            if not es_profesor:
+                ya_registrado = conn.execute(
+                    "SELECT 1 FROM asistencia WHERE idUsuario = ? AND idClase = ? "
+                    "AND DATE(fechaHora) = DATE('now', 'localtime') AND tipoRegistro = ?",
+                    (idUsuario, idClase, tipo),
+                ).fetchone()
+                if ya_registrado:
+                    return ResultadoAsistencia.YA_REGISTRADO
+
+            conn.execute(
+                "INSERT INTO asistencia "
+                "(idUsuario, idClase, fechaHora, confianza, tipoRegistro, nombreUsuario, nombreClase) "
+                "VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?)",
+                (idUsuario, idClase, confianza, tipo, nombreUsuario, nombreClase),
+            )
+        return ResultadoAsistencia.REGISTRADO
 
     def registros_hoy(self, idUsuario: int, idClase: int) -> set[str]:
         """Tipos de registro (ENTRADA/SALIDA) que el usuario ya hizo hoy en esta clase."""
@@ -108,9 +123,29 @@ class AsistenciaService:
             ).fetchall()
         return {row["tipoRegistro"] for row in rows}
 
+    def ultimo_tipo_registro_hoy(self, idUsuario: int, idClase: int) -> str | None:
+        """Tipo de registro (ENTRADA/SALIDA) más reciente del usuario hoy en esta
+        clase, o None si no tiene ninguno. Se usa para alternar entre entrada y
+        salida en los registros sin límite (p. ej. de los Profesores)."""
+        with self.db.get_connection() as conn:
+            row = conn.execute(
+                "SELECT tipoRegistro FROM asistencia "
+                "WHERE idUsuario = ? AND idClase = ? AND DATE(fechaHora) = DATE('now', 'localtime') "
+                "ORDER BY fechaHora DESC, idAsistencia DESC LIMIT 1",
+                (idUsuario, idClase),
+            ).fetchone()
+        return row["tipoRegistro"] if row else None
+
     def historial(
-        self, idUsuario: int | None = None, idClase: int | None = None, idTipoUsuario: int | None = None
+        self,
+        idUsuario: int | None = None,
+        idClase: int | None = None,
+        idClases: list[int] | None = None,
+        idTipoUsuario: int | None = None,
     ) -> list[dict]:
+        if idClases is not None and not idClases:
+            return []
+
         query = """
             SELECT
                 a.idAsistencia,
@@ -136,6 +171,9 @@ class AsistenciaService:
         if idClase is not None:
             condiciones.append("a.idClase = ?")
             params.append(idClase)
+        if idClases is not None:
+            condiciones.append(f"a.idClase IN ({', '.join('?' * len(idClases))})")
+            params.extend(idClases)
         if idTipoUsuario is not None:
             condiciones.append("u.tipoUsuario = ?")
             params.append(idTipoUsuario)
@@ -148,9 +186,17 @@ class AsistenciaService:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
 
-    def metricas_por_usuario(self, idClase: int | None = None, idTipoUsuario: int | None = None) -> list[dict]:
+    def metricas_por_usuario(
+        self,
+        idClase: int | None = None,
+        idClases: list[int] | None = None,
+        idTipoUsuario: int | None = None,
+    ) -> list[dict]:
         """Totales de asistencia (entradas/salidas) agrupados por usuario, para
         mostrar métricas en los reportes."""
+        if idClases is not None and not idClases:
+            return []
+
         query = """
             SELECT
                 u.idUsuario,
@@ -171,6 +217,9 @@ class AsistenciaService:
         if idClase is not None:
             condiciones.append("a.idClase = ?")
             params.append(idClase)
+        if idClases is not None:
+            condiciones.append(f"a.idClase IN ({', '.join('?' * len(idClases))})")
+            params.extend(idClases)
         if idTipoUsuario is not None:
             condiciones.append("u.tipoUsuario = ?")
             params.append(idTipoUsuario)

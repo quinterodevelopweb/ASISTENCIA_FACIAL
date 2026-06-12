@@ -167,15 +167,6 @@ ON asistencia(fechaHora);
 CREATE INDEX idx_asistencia_usuario_fecha
 ON asistencia(idUsuario, fechaHora);
 
--- Permite un registro de ENTRADA y uno de SALIDA por usuario, clase y día.
-CREATE UNIQUE INDEX idx_asistencia_unica
-ON asistencia(
-    idUsuario,
-    idClase,
-    DATE(fechaHora),
-    tipoRegistro
-);
-
 -- Triggers: mantener fechaHoraActualizacion al día
 CREATE TRIGGER trg_usuario_update
 AFTER UPDATE ON usuarios

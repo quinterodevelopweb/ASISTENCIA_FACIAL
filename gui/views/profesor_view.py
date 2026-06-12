@@ -151,14 +151,18 @@ class ProfesorView(BaseView):
         self._cargar_reportes()
 
     def _cargar_reportes(self) -> None:
-        idClase = self._clases_por_nombre.get(self.combo_clase.get())
-        self._cargar_historial(idClase)
-        self._cargar_metricas(idClase)
+        seleccion = self.combo_clase.get()
+        if seleccion in self._clases_por_nombre:
+            idClases = [self._clases_por_nombre[seleccion]]
+        else:
+            idClases = list(self._clases_por_nombre.values())
+        self._cargar_historial(idClases)
+        self._cargar_metricas(idClases)
 
-    def _cargar_historial(self, idClase: int | None) -> None:
+    def _cargar_historial(self, idClases: list[int]) -> None:
         self.tabla_historial.limpiar()
 
-        registros = self.asistencia_service.historial(idClase=idClase, idTipoUsuario=self._idTipoAlumno)
+        registros = self.asistencia_service.historial(idClases=idClases, idTipoUsuario=self._idTipoAlumno)
         if not registros:
             ctk.CTkLabel(self.tabla_historial.inner, text="No hay registros de asistencia").pack(
                 anchor="w", padx=10, pady=5
@@ -175,10 +179,10 @@ class ProfesorView(BaseView):
             )
             ctk.CTkLabel(self.tabla_historial.inner, text=texto).pack(anchor="w", padx=10, pady=2)
 
-    def _cargar_metricas(self, idClase: int | None) -> None:
+    def _cargar_metricas(self, idClases: list[int]) -> None:
         self.tabla_metricas.limpiar()
 
-        metricas = self.asistencia_service.metricas_por_usuario(idClase=idClase, idTipoUsuario=self._idTipoAlumno)
+        metricas = self.asistencia_service.metricas_por_usuario(idClases=idClases, idTipoUsuario=self._idTipoAlumno)
         if not metricas:
             ctk.CTkLabel(self.tabla_metricas.inner, text="No hay registros de asistencia").pack(
                 anchor="w", padx=10, pady=5
